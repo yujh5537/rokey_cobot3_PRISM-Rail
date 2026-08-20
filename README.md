@@ -1,12 +1,12 @@
 # 의료 레일 관제 디지털 트윈 프로젝트
 
 ## 담당
-| 파트 | 담당자 | 브랜치 | 폴더 |
+| 파트 | 담당자 | 폴더 |
 |---|---|---|---|
-| A. 관제 코어 | 남현지 | `feat/core-fsm` | `rail_control_core/` |
-| B. 씬 빌더 | 한석형 | `feat/sim-scene` | `rail_sim_assets/` |
-| C. 연동 | 정희진 | `feat/bridge` | `rail_bridge/` |
-| D. UI·QA | 김세은 | `feat/ui-dashboard` | `rail_ui/` |
+| A. 관제 코어 | 남현지 | `rail_control_core/` |
+| B. 씬 빌더 | 한석형 | `rail_sim_assets/` |
+| C. 연동 | 정희진 | `rail_bridge/` |
+| D. UI·QA | 김세은 | `rail_ui/` |
 
 ## 공용 인터페이스
 `rail_msgs/` 는 4개 파트가 전부 사용하는 공용 데이터 서식입니다.
