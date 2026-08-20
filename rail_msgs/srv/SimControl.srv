@@ -1,0 +1,9 @@
+# UI → 코어
+# 변경 시 D(김세은)의 PR 승인 필수
+
+string  command    # "start" | "reset" | "speed" | "mode"
+float32 value       # speed일 때 1.0/2.0/4.0
+string  mode        # "A" | "B"
+---
+bool   success
+string message

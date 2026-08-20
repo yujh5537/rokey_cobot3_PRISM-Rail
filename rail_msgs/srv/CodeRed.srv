@@ -1,0 +1,9 @@
+# UI → 코어
+# 변경 시 D(김세은)의 PR 승인 필수
+
+string src_node
+string dst_node
+string item
+---
+bool   success
+string order_id
