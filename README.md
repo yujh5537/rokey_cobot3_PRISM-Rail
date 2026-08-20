@@ -1,26 +1,24 @@
 # 의료 레일 관제 디지털 트윈 프로젝트
 
-## 담당
-| 파트 | 담당자 | 브랜치 | 폴더 |
-|---|---|---|---|
-| A. 관제 코어 | 남현지 | `feat/core-fsm` | `rail_control_core/` |
-| B. 씬 빌더 | 한석형 | `feat/sim-scene` | `rail_sim_assets/` |
-| C. 연동 | 정희진 | `feat/bridge` | `rail_bridge/` |
-| D. UI·QA | 김세은 | `feat/ui-dashboard` | `rail_ui/` |
 
-## 공용 인터페이스
-`rail_msgs/` 는 4개 파트가 전부 사용하는 공용 데이터 서식입니다.
-**이 폴더를 변경하는 PR은 D(김세은)의 승인이 반드시 필요합니다.**
-자세한 필드 정의는 `docs/interface_spec.md` 참고.
+### 담당 폴더 — 내 폴더만 수정
+| 파트 | 담당자 | 폴더 |
+|---|---|---|
+| A. 관제 코어 | 남현지 | `rail_control_core/` |
+| B. 씬 빌더 | 한석형 | `rail_sim_assets/` |
+| C. 연동 | 정희진 | `rail_bridge/` |
+| D. UI·QA | 김세은 | `rail_ui/` |
 
-## 브랜치 규칙
-1. `main`에 직접 push 금지 — 반드시 PR로만 병합
-2. `rail_msgs/` 변경 PR은 D 승인 필수
-3. 매일 저녁 각자 `main`을 자기 브랜치로 pull 하기
+다른 사람 폴더는 **직접 고치지 말고, 담당자에게 요청**하세요.
 
-## 시작하기
-```bash
-git clone <이 저장소 주소>
-cd medical-rail-twin
-git checkout feat/ui-dashboard   # 각자 자기 브랜치로 이동
-```
+### rail_msgs/ (공용 인터페이스) — 예외 규칙
+- 이 폴더는 전원이 같이 씁니다. **혼자 판단으로 고치지 마세요.**
+- **이름 변경·삭제는 다른 사람 코드를 깨뜨리니 절대 사전 통보 없이 하지 마세요.**
+
+### push 전 최소 절차
+1. 작업 시작 전 `git pull origin main`으로 최신 상태 받기
+2. 내 폴더 작업이 끝나면 모두에 "○○ 폴더 push함" 알리
+3. `rail_msgs/`를 건드렸다면 공지에 **어떤 필드가 바뀌었는지** 반드시 포함
+
+### 충돌 났을 때
+- `git pull`했는데 충돌이 나면, 절대 혼자 임의로 남의 코드를 지우지 말고 팀 채팅에 공유 후 같이 해결
