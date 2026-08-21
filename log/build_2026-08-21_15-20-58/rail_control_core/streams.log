@@ -1,0 +1,53 @@
+[0.470s] Invoking command in '/home/rokey/rokey_cobot3/src/rail_control_core': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rokey/rokey_cobot3/build/rail_control_core/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/rail_control_core build --build-base /home/rokey/rokey_cobot3/build/rail_control_core/build install --record /home/rokey/rokey_cobot3/build/rail_control_core/install.log --install-scripts $base/lib/rail_control_core --single-version-externally-managed install_data
+[0.590s] running egg_info
+[0.590s] creating ../../build/rail_control_core/rail_control_core.egg-info
+[0.597s] writing ../../build/rail_control_core/rail_control_core.egg-info/PKG-INFO
+[0.597s] writing dependency_links to ../../build/rail_control_core/rail_control_core.egg-info/dependency_links.txt
+[0.597s] writing entry points to ../../build/rail_control_core/rail_control_core.egg-info/entry_points.txt
+[0.598s] writing requirements to ../../build/rail_control_core/rail_control_core.egg-info/requires.txt
+[0.598s] writing top-level names to ../../build/rail_control_core/rail_control_core.egg-info/top_level.txt
+[0.598s] writing manifest file '../../build/rail_control_core/rail_control_core.egg-info/SOURCES.txt'
+[0.613s] reading manifest file '../../build/rail_control_core/rail_control_core.egg-info/SOURCES.txt'
+[0.613s] writing manifest file '../../build/rail_control_core/rail_control_core.egg-info/SOURCES.txt'
+[0.613s] running build
+[0.614s] running build_py
+[0.614s] creating /home/rokey/rokey_cobot3/build/rail_control_core/build
+[0.614s] creating /home/rokey/rokey_cobot3/build/rail_control_core/build/lib
+[0.614s] creating /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core
+[0.614s] copying rail_control_core/fsm.py -> /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core
+[0.614s] copying rail_control_core/engine.py -> /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core
+[0.614s] copying rail_control_core/__init__.py -> /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core
+[0.614s] copying rail_control_core/topology.py -> /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core
+[0.614s] copying rail_control_core/control_core_node.py -> /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core
+[0.614s] running install
+[0.617s] running install_lib
+[0.625s] creating /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core
+[0.625s] copying /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core/fsm.py -> /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core
+[0.625s] copying /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core/engine.py -> /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core
+[0.625s] copying /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core/__init__.py -> /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core
+[0.625s] copying /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core/topology.py -> /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core
+[0.625s] copying /home/rokey/rokey_cobot3/build/rail_control_core/build/lib/rail_control_core/control_core_node.py -> /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core
+[0.625s] byte-compiling /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core/fsm.py to fsm.cpython-312.pyc
+[0.625s] byte-compiling /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core/engine.py to engine.cpython-312.pyc
+[0.629s] byte-compiling /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core/__init__.py to __init__.cpython-312.pyc
+[0.629s] byte-compiling /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core/topology.py to topology.cpython-312.pyc
+[0.629s] byte-compiling /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core/control_core_node.py to control_core_node.cpython-312.pyc
+[0.630s] running install_data
+[0.630s] creating /home/rokey/rokey_cobot3/install/rail_control_core/share/ament_index
+[0.630s] creating /home/rokey/rokey_cobot3/install/rail_control_core/share/ament_index/resource_index
+[0.630s] creating /home/rokey/rokey_cobot3/install/rail_control_core/share/ament_index/resource_index/packages
+[0.630s] copying resource/rail_control_core -> /home/rokey/rokey_cobot3/install/rail_control_core/share/ament_index/resource_index/packages
+[0.630s] copying package.xml -> /home/rokey/rokey_cobot3/install/rail_control_core/share/rail_control_core
+[0.630s] creating /home/rokey/rokey_cobot3/install/rail_control_core/share/rail_control_core/config
+[0.630s] copying config/scenario_main.yaml -> /home/rokey/rokey_cobot3/install/rail_control_core/share/rail_control_core/config
+[0.630s] copying config/topology.yaml -> /home/rokey/rokey_cobot3/install/rail_control_core/share/rail_control_core/config
+[0.630s] copying config/params.yaml -> /home/rokey/rokey_cobot3/install/rail_control_core/share/rail_control_core/config
+[0.630s] creating /home/rokey/rokey_cobot3/install/rail_control_core/share/rail_control_core/launch
+[0.630s] copying launch/control_core.launch.py -> /home/rokey/rokey_cobot3/install/rail_control_core/share/rail_control_core/launch
+[0.630s] running install_egg_info
+[0.638s] Copying ../../build/rail_control_core/rail_control_core.egg-info to /home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages/rail_control_core-1.0.0-py3.12.egg-info
+[0.639s] running install_scripts
+[0.693s] Installing control_core script to /home/rokey/rokey_cobot3/install/rail_control_core/lib/rail_control_core
+[0.693s] Installing sim script to /home/rokey/rokey_cobot3/install/rail_control_core/lib/rail_control_core
+[0.693s] writing list of installed files to '/home/rokey/rokey_cobot3/build/rail_control_core/install.log'
+[0.707s] Invoked command in '/home/rokey/rokey_cobot3/src/rail_control_core' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rokey/rokey_cobot3/build/rail_control_core/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rokey/rokey_cobot3/install/rail_control_core/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/rail_control_core build --build-base /home/rokey/rokey_cobot3/build/rail_control_core/build install --record /home/rokey/rokey_cobot3/build/rail_control_core/install.log --install-scripts $base/lib/rail_control_core --single-version-externally-managed install_data

@@ -4,23 +4,40 @@
       "type": "std_msgs/msg/String",
       "qos": "Reliable",
       "direction": "Core(A) -> Bridge(C) -> Isaac Sim(B)",
-      "example": {
-        "capsule_id": "C_1",
-        "action": "EVACUATE",
-        "target_node": "E1",
-        "block_id": "B08",
-        "speed": 0.8
+      "description": "FSM 상태 변경(capsule_state) 또는 선점/대피 연출 이벤트(preempt)",
+      "examples": {
+        "capsule_state": {
+          "t": 12.0,
+          "kind": "capsule_state",
+          "capsule": "C-02",
+          "order": "O-2",
+          "from": "MOVING",
+          "to": "YIELD_WAIT",
+          "node": "N-S2"
+        },
+        "preempt": {
+          "t": 20.0,
+          "kind": "preempt",
+          "action": "EVACUATE",
+          "by": "CR-1",
+          "target": "O-4",
+          "block": "B2-07a",
+          "siding": "B2-07b",
+          "reason": "Code Crimson 콘보이 회랑 확보를 위해 대피 레인으로 회피"
+        }
       }
     },
     "/capsule_pose": {
       "type": "std_msgs/msg/String",
       "qos": "BestEffort",
-      "direction": "Bridge(C)/Isaac(B) -> Core(A) & UI(D)",
+      "direction": "Bridge(C)/Isaac Sim(B) -> Core(A) & UI(D)",
+      "description": "실시간 캡슐 위치 및 블록 점유 텔레메트리",
       "example": {
-        "capsule_id": "C_1",
-        "current_block": "B05",
-        "x": 12.5,
-        "y": 4.2,
+        "capsule_id": "C-01",
+        "current_block": "SB-UP",
+        "node": "N-W1",
+        "x": 0.5,
+        "y": 1.0,
         "z": 2.0,
         "status": "MOVING"
       }
@@ -28,12 +45,15 @@
     "/order_event": {
       "type": "std_msgs/msg/String",
       "qos": "Reliable",
-      "direction": "Core(A)/Bridge(C) -> UI(D)",
+      "direction": "Core(A) -> UI(D)",
       "example": {
-        "order_id": "O-4",
-        "priority": "P0",
-        "event": "CODE_RED_DISPATCHED",
-        "timestamp": 20.0
+        "t": 20.0,
+        "kind": "order_event",
+        "order_id": "CR-1",
+        "priority": 0,
+        "item": "응급 수혈혈액(Code Crimson 콘보이)",
+        "state": "QUEUED",
+        "code_red": true
       }
     }
   }
