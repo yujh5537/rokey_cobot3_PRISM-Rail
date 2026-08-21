@@ -88,7 +88,7 @@ python3 -m pytest test/ -v
 - 전 오더 완료 (교착 방지)
 - 종료 후 자원 누수 없음
 - 오염/청결 동선 분리
-- 토폴로지 형상 (10노드 8블록)
+- 토폴로지 형상 (v3.1 FROZEN — 30블록, `docs/topology_spec.md` §2~§4)
 
 ---
 
@@ -97,17 +97,16 @@ python3 -m pytest test/ -v
 ```
 rail_control_core/
 ├── config/
-│   ├── topology.yaml         ← 10노드·8블록 (팀 계약. 함부로 바꾸지 말 것)
-│   ├── params.yaml           ← 모드, 임계값, 기준값
-│   └── scenario_main.yaml    ← 시나리오 오더 O-1~O-4
+│   └── params.yaml           ← ROS 설정 + engine 블록(엔진 파라미터 오버라이드)
 ├── rail_control_core/
-│   ├── topology.py           ← 그래프 로딩 + BFS 경로탐색 + 금지 간선
+│   ├── topology.py           ← 블록·회랑·경로 테이블 (v3.1 FROZEN) ★팀 계약★
 │   ├── fsm.py                ← 3-FSM 상태 정의 + 데이터 모델
 │   ├── engine.py             ← 관제 두뇌 (ROS 무의존) ★핵심★
+│   ├── scenario.py           ← 시연 시나리오 v2 발령표 (명세서 §6-1)
 │   └── control_core_node.py  ← rclpy 래퍼 (판단 로직 없음)
 ├── launch/control_core.launch.py
-├── test/test_regression.py
-└── tools/calibrate.py        ← 기준값 맞추기용 파라미터 탐색
+├── test/test_regression.py   ← §6-2 회귀 기준값 고정
+└── tools/kpi_report.py       ← 모드 A/B 비교표 출력 (발표용)
 ```
 
 **설계 원칙: 판단은 `engine.py`에, ROS는 `control_core_node.py`에.**
@@ -115,16 +114,27 @@ rail_control_core/
 
 ---
 
-## 파라미터 캘리브레이션
+## 블록 길이를 바꿔야 할 때 (B 담당자 씬 좌표 확정 시)
 
-기준값을 바꾸고 싶을 때:
+블록 길이·용량은 `rail_control_core/topology.py` 의 `BLOCKS` 에 하드코딩되어
+있습니다. YAML 로 빼지 않은 이유는 팀 계약(ID 동결) 대상이라 코드 리뷰에
+그대로 걸리게 하기 위해서입니다. 절차는 이렇습니다.
 
 ```bash
-python3 tools/calibrate.py
+# 1) topology.py 의 BLOCKS 숫자만 수정
+# 2) 새 수치 측정
+python3 tools/kpi_report.py
+
+# 3) 기준값이 바뀌었으면 두 곳을 함께 갱신 (한쪽만 고치지 말 것)
+#    - docs/topology_spec.md §6-2 표
+#    - test/test_regression.py 의 BASE_A / BASE_B
+python3 -m pytest test/ -q
 ```
 
-구간 통과시간을 탐색해 목표 KPI에 맞춥니다.
-단, **4가지 시연 장면이 모두 재현되는지** 반드시 함께 확인하세요.
+`kpi_report.py` 는 기준값에서 벗어나면 ⚠️ 를 찍고 exit code 1 로 끝납니다.
+
+단, **4가지 시연 장면이 모두 재현되는지** 반드시 함께 확인하세요
+(`kpi_report.py` 출력의 `발생 장면` 줄 — YIELD / EVAC / FINISH_ALLOWED).
 숫자만 맞추다 보면 대피 장면이 사라지는 일이 실제로 발생합니다.
 
 ---
@@ -134,7 +144,7 @@ python3 tools/calibrate.py
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | `Package 'rail_control_core' not found` | 소싱 안 함 | `source ~/cobot3_ws/install/setup.bash` |
-| `config` 파일을 못 찾음 | `setup.py`의 `data_files` 누락 | yaml 추가 후 `colcon build` 재실행 |
+| `params.yaml` 을 못 찾음 | `setup.py`의 `data_files` 누락 | yaml 추가 후 `colcon build` 재실행 |
 | 다른 PC에서 토픽이 안 보임 | 도메인/화이트리스트 불일치 | `ROS_DOMAIN_ID=50`, 화이트리스트에 본인 IP 포함 확인 |
 | 자기 노드끼리도 통신 안 됨 | 화이트리스트에 `127.0.0.1` 누락 | XML에 루프백 주소 추가 |
 | `colcon build` 후 `src/build` 생성 | `src/` 안에서 빌드함 | `~/cobot3_ws`에서 실행 |
