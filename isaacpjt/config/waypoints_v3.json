@@ -1,0 +1,258 @@
+{
+  "version": "v3.0",
+  "units": {
+    "position": "meter (m)",
+    "distance": "meter (m)"
+  },
+  "floors": {
+    "B1F": {
+      "level_z": 4.0,
+      "nodes": {
+        "N-W1": {
+          "prim": "N_W1",
+          "pos": [-7.0, -5.0, 4.0],
+          "role": "Shaft B1F 랜딩"
+        },
+        "N-S1": {
+          "prim": "N_S1",
+          "pos": [-6.0, -2.0, 4.0],
+          "role": "주사조제실 분기"
+        },
+        "N-S2": {
+          "prim": "N_S2",
+          "pos": [-2.0, -2.0, 4.0],
+          "role": "약제부 분기"
+        },
+        "N-L1": {
+          "prim": "N_L1",
+          "pos": [0.0, -2.0, 4.0],
+          "role": "Loop A 시작"
+        },
+        "N-L2": {
+          "prim": "N_L2",
+          "pos": [3.0, -2.0, 4.0],
+          "role": "Loop A 종료"
+        },
+        "N-E1": {
+          "prim": "N_E1",
+          "pos": [4.0, -2.0, 4.0],
+          "role": "동측 합류점"
+        },
+        "N-L3": {
+          "prim": "N_L3",
+          "pos": [4.0, 0.0, 4.0],
+          "role": "Loop B 시작"
+        },
+        "N-L4": {
+          "prim": "N_L4",
+          "pos": [4.0, 3.0, 4.0],
+          "role": "Loop B 종료"
+        },
+        "N-D1": {
+          "prim": "N_D1",
+          "pos": [5.0, 4.5, 4.0],
+          "role": "Depot 충전 Zone 진입"
+        },
+        "N-D2": {
+          "prim": "N_D2",
+          "pos": [7.0, 4.5, 4.0],
+          "role": "Depot 출구"
+        },
+        "N-B1": {
+          "prim": "N_B1",
+          "pos": [7.0, -3.0, 4.0],
+          "role": "혈액은행 출동 Queue 끝"
+        }
+      },
+      "stations": {
+        "ST-INJ": {
+          "prim": "ST_INJ",
+          "pos": [-6.0, 4.0, 4.0],
+          "role": "주사조제실 안"
+        },
+        "ST-PHM": {
+          "prim": "ST_PHM",
+          "pos": [-2.0, 4.0, 4.0],
+          "role": "약제부 안"
+        }
+      },
+      "blocks": {
+        "BB-01": {
+          "connection": ["N-W1", "N-S1"],
+          "scene_distance_m": 3.16
+        },
+        "BB-02": {
+          "connection": ["N-S1", "N-S2"],
+          "scene_distance_m": 4.00
+        },
+        "BB-03": {
+          "connection": ["N-S2", "N-L1"],
+          "scene_distance_m": 2.00
+        },
+        "BB-04a": {
+          "connection": ["N-L1", "N-L2"],
+          "scene_distance_m": 3.00,
+          "type": "straight"
+        },
+        "BB-04b": {
+          "connection": ["N-L1", "N-L2"],
+          "scene_distance_m": 3.00,
+          "type": "siding_loop"
+        },
+        "BB-05": {
+          "connection": ["N-L2", "N-E1"],
+          "scene_distance_m": 1.00
+        },
+        "BB-06a": {
+          "connection": ["N-E1", "N-L3"],
+          "scene_distance_m": 2.00
+        },
+        "BB-06b": {
+          "connection": ["N-L3", "N-L4"],
+          "scene_distance_m": 3.00,
+          "type": "straight"
+        },
+        "BB-06c": {
+          "connection": ["N-L3", "N-L4"],
+          "scene_distance_m": 3.00,
+          "type": "siding_loop"
+        },
+        "BB-06d": {
+          "connection": ["N-L4", "N-D1"],
+          "scene_distance_m": 1.80
+        },
+        "BB-07": {
+          "connection": ["N-D1", "N-D2"],
+          "scene_distance_m": 2.00,
+          "type": "depot_zone"
+        },
+        "BB-08": {
+          "connection": ["N-D2", "N-B1"],
+          "scene_distance_m": 7.50,
+          "type": "unidirectional"
+        },
+        "BB-09": {
+          "connection": ["N-B1", "N-E1"],
+          "scene_distance_m": 3.16
+        }
+      }
+    },
+    "2F": {
+      "level_z": 13.0,
+      "nodes": {
+        "N-W2": {
+          "prim": "N_W2",
+          "pos": [-7.0, -5.0, 13.0],
+          "role": "Shaft 2F 랜딩"
+        },
+        "N-S3": {
+          "prim": "N_S3",
+          "pos": [-6.0, -2.0, 13.0],
+          "role": "CSR 분기"
+        },
+        "N-S4": {
+          "prim": "N_S4",
+          "pos": [-2.0, -2.0, 13.0],
+          "role": "ICU 분기"
+        },
+        "N-L5": {
+          "prim": "N_L5",
+          "pos": [0.0, -2.0, 13.0],
+          "role": "Loop A2 시작"
+        },
+        "N-L6": {
+          "prim": "N_L6",
+          "pos": [3.0, -2.0, 13.0],
+          "role": "Loop A2 종료"
+        },
+        "N-E2": {
+          "prim": "N_E2",
+          "pos": [4.0, -2.0, 13.0],
+          "role": "동측 수술실 분기"
+        },
+        "N-L7": {
+          "prim": "N_L7",
+          "pos": [4.0, 0.0, 13.0],
+          "role": "Loop B2 시작"
+        },
+        "N-L8": {
+          "prim": "N_L8",
+          "pos": [4.0, 3.0, 13.0],
+          "role": "Loop B2 종료"
+        }
+      },
+      "stations": {
+        "ST-CSR": {
+          "prim": "ST_CSR",
+          "pos": [-6.0, 4.0, 13.0],
+          "role": "CSR 안"
+        },
+        "ST-ICU": {
+          "prim": "ST_ICU",
+          "pos": [-2.0, 4.0, 13.0],
+          "role": "ICU 안"
+        },
+        "ST-OR1": {
+          "prim": "ST_OR1",
+          "pos": [6.0, 4.0, 13.0],
+          "role": "수술실1"
+        },
+        "ST-OR2": {
+          "prim": "ST_OR2",
+          "pos": [6.0, -2.0, 13.0],
+          "role": "수술실2"
+        }
+      },
+      "blocks": {
+        "B2-01": {
+          "connection": ["N-W2", "N-S3"],
+          "scene_distance_m": 3.16
+        },
+        "B2-02": {
+          "connection": ["N-S3", "N-S4"],
+          "scene_distance_m": 4.00
+        },
+        "B2-03": {
+          "connection": ["N-S4", "N-L5"],
+          "scene_distance_m": 2.00
+        },
+        "B2-04a": {
+          "connection": ["N-L5", "N-L6"],
+          "scene_distance_m": 3.00,
+          "type": "straight"
+        },
+        "B2-04b": {
+          "connection": ["N-L5", "N-L6"],
+          "scene_distance_m": 3.00,
+          "type": "siding_loop"
+        },
+        "B2-05": {
+          "connection": ["N-L6", "N-E2"],
+          "scene_distance_m": 1.00
+        },
+        "B2-06": {
+          "connection": ["N-E2", "N-L7"],
+          "scene_distance_m": 2.00
+        },
+        "B2-07a": {
+          "connection": ["N-L7", "N-L8"],
+          "scene_distance_m": 3.00,
+          "type": "straight"
+        },
+        "B2-07b": {
+          "connection": ["N-L7", "N-L8"],
+          "scene_distance_m": 3.00,
+          "type": "siding_loop"
+        },
+        "B2-08": {
+          "connection": ["N-L8", "ST-OR1"],
+          "scene_distance_m": 2.24
+        },
+        "B2-09": {
+          "connection": ["N-E2", "ST-OR2"],
+          "scene_distance_m": 2.00
+        }
+      }
+    }
+  }
+}
