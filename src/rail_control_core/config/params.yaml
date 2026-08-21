@@ -25,18 +25,11 @@ control_core_node:
     # 선점 대상 캡슐과 선점하는 캡슐의 등급 차이가 이 값 이상일 때만 대피 명령
     evacuate_min_gap: 1
 
-    # ---------- 회귀 테스트 기준 (2일차 과제) ----------
-    # ⚠️ 기준 KPI는 아직 팀 미확정 상태입니다.
-    #    아래 baseline_kpi 값만 바꾸면 회귀 테스트가 그 지표를 기준으로 돕니다.
-    #    선택지: p0_finish_s | p0_lead_time_s | makespan_s | avg_lead_time_s
-    baseline_kpi: "p0_finish_s"
-    baseline_mode_a: 53.9
-    baseline_mode_b: 44.7
-    baseline_tolerance: 0.5
-
-    # 참고: 발표자료에 적힌 54.3 / 44.2 는 무엇의 시간인지 명시가 없었습니다.
-    #       p0_finish_s 로 해석했을 때만 0.5초 이내로 일치합니다.
-    #       팀 확정 후 baseline_kpi 를 바꾸고 tools/kpi_report.py 값으로 갱신하세요.
+    # ---------- 회귀 테스트 기준값 (2일차 과제) ----------
+    # 발표자료 기준값. 코드를 고친 뒤에도 이 값이 유지되어야 "회귀 없음".
+    baseline_mode_a_s: 54.3
+    baseline_mode_b_s: 44.2
+    baseline_tolerance_s: 0.5
 
     # ---------- 발행 주기 ----------
     publish_hz: 10.0

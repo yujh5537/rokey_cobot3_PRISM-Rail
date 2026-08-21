@@ -99,23 +99,11 @@ class RailEngine:
             ))
 
     def add_order(self, order: Order) -> None:
-        """오더를 등록하고, 출발지에 전용 캡슐을 배치합니다 (MVP: 캡슐 = 오더 1:1).
-
-        캡슐 ID는 오더 ID에서 뽑되 **반드시 충돌을 피해야** 합니다.
-        예) 시연 중 /code_red 로 들어온 "CR-1" 을 단순히 마지막 조각으로 자르면
-            "C-1" 이 되어 기존 O-1 의 캡슐과 겹칩니다. 그러면 새 캡슐이 만들어지지
-            않아 출발지에 배차할 캡슐이 없고, 오더가 QUEUED 상태로 영원히 멈춥니다.
-        """
         self.orders[order.oid] = order
-
+        # 시나리오 오더는 출발지에 캡슐을 하나씩 배치 (MVP: 캡슐 = 오더 1:1)
         cid = f"C-{order.oid.split('-')[-1]}"
-        if cid in self.capsules:                 # 충돌 → 오더 ID 전체를 사용
-            cid = f"C-{order.oid}"               # 예: CR-1 → C-CR-1
-            n = 2
-            while cid in self.capsules:
-                cid = f"C-{order.oid}-{n}"
-                n += 1
-        self.add_capsule(cid, order.origin)
+        if cid not in self.capsules:
+            self.add_capsule(cid, order.origin)
 
     # =================================================================
     # 메인 루프

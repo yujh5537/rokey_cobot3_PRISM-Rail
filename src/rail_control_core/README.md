@@ -129,49 +129,13 @@ python3 tools/calibrate.py
 
 ---
 
-## 팀 환경 (전원 동일해야 함)
-
-| 항목 | 값 |
-|---|---|
-| ROS2 배포판 | **Jazzy** (Ubuntu 24.04) — 팀 확정 |
-| `ROS_DOMAIN_ID` | **136** — 팀 확정 |
-| `RMW_IMPLEMENTATION` | `rmw_fastrtps_cpp` |
-| 화이트리스트 | `127.0.0.1`, `10.10.0.1~4` |
-
-> ⚠️ 발표자료 아키텍처 도면에는 "도메인 50"으로 적혀 있습니다.
-> **도면을 136으로 수정**해야 합니다. (2차 발표 1-1. 시스템 아키텍처)
-
-### 환경 설정 스크립트
-
-```bash
-chmod +x tools/setup_env.sh
-./tools/setup_env.sh 3 --check   # 진단만 (아무것도 안 고침) ← 먼저 이걸로
-./tools/setup_env.sh 3           # 설정 적용 (충돌 발견 시 물어봄)
-./tools/setup_env.sh 3 --fix     # 낡은 충돌 설정을 자동 주석 처리
-source ~/.bashrc
-rosenv                            # 현재 설정 확인
-```
-
-`3`은 조원 번호입니다(→ `10.10.0.3`).
-
-**충돌 검사**: `.bashrc`에 `ROS_DOMAIN_ID=50`, `source /opt/ros/humble/...` 같은
-낡은 줄이 남아 있으면 행 번호와 함께 표시합니다.
-
-- ❌ = 확정값과 다름 (반드시 정리)
-- ✅ = 값은 같음 (중복일 뿐)
-
-`--fix`로 정리하면 원본은 `~/.bashrc.bak.<날짜시각>`에 백업됩니다.
-주석 줄과 단순 `echo` 줄은 오탐하지 않습니다.
-
----
-
 ## 자주 겪는 오류
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | `Package 'rail_control_core' not found` | 소싱 안 함 | `source ~/cobot3_ws/install/setup.bash` |
 | `config` 파일을 못 찾음 | `setup.py`의 `data_files` 누락 | yaml 추가 후 `colcon build` 재실행 |
-| 다른 PC에서 토픽이 안 보임 | 도메인/화이트리스트 불일치 | `ROS_DOMAIN_ID=136`, 화이트리스트에 본인 IP 포함 확인 |
+| 다른 PC에서 토픽이 안 보임 | 도메인/화이트리스트 불일치 | `ROS_DOMAIN_ID=50`, 화이트리스트에 본인 IP 포함 확인 |
 | 자기 노드끼리도 통신 안 됨 | 화이트리스트에 `127.0.0.1` 누락 | XML에 루프백 주소 추가 |
 | `colcon build` 후 `src/build` 생성 | `src/` 안에서 빌드함 | `~/cobot3_ws`에서 실행 |
 | 코드 고쳤는데 반영 안 됨 | `--symlink-install` 없이 빌드 | 재빌드하거나 옵션 추가 |

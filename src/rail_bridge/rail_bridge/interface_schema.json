@@ -1,0 +1,40 @@
+{
+  "topics": {
+    "/capsule_cmd": {
+      "type": "std_msgs/msg/String",
+      "qos": "Reliable",
+      "direction": "Core(A) -> Bridge(C) -> Isaac Sim(B)",
+      "example": {
+        "capsule_id": "C_1",
+        "action": "EVACUATE",
+        "target_node": "E1",
+        "block_id": "B08",
+        "speed": 0.8
+      }
+    },
+    "/capsule_pose": {
+      "type": "std_msgs/msg/String",
+      "qos": "BestEffort",
+      "direction": "Bridge(C)/Isaac(B) -> Core(A) & UI(D)",
+      "example": {
+        "capsule_id": "C_1",
+        "current_block": "B05",
+        "x": 12.5,
+        "y": 4.2,
+        "z": 2.0,
+        "status": "MOVING"
+      }
+    },
+    "/order_event": {
+      "type": "std_msgs/msg/String",
+      "qos": "Reliable",
+      "direction": "Core(A)/Bridge(C) -> UI(D)",
+      "example": {
+        "order_id": "O-4",
+        "priority": "P0",
+        "event": "CODE_RED_DISPATCHED",
+        "timestamp": 20.0
+      }
+    }
+  }
+}

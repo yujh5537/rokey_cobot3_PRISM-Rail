@@ -117,16 +117,11 @@ class ControlCoreNode(Node):
             elif ev.kind in ("capsule_state", "preempt"):
                 self.pub_cmd.publish(msg)          # C가 Isaac Sim으로 중계
                 if ev.kind == "preempt":
-                    act = ev.payload.get("action")
-                    tgt = ev.payload.get("target")
-                    why = ev.payload.get("reason")
-                    if act == "RESUME":
-                        # 복구는 '누가 선점했다'가 아니라 '길이 열려 스스로 재개'입니다
-                        self.get_logger().info(f"[복구] {tgt} 재개 — {why}")
-                    else:
-                        self.get_logger().warn(
-                            f"[선점] {act} {ev.payload.get('by')} → {tgt} ({why})"
-                        )
+                    self.get_logger().warn(
+                        f"[선점] {ev.payload.get('action')} "
+                        f"{ev.payload.get('by')} → {ev.payload.get('target')} "
+                        f"({ev.payload.get('reason')})"
+                    )
 
         # 전체 스냅샷은 매 틱 통째로 (D의 대시보드가 재조립할 필요 없게)
         self.pub_state.publish(
@@ -185,13 +180,10 @@ def main(args=None) -> None:
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("종료 요청 — 관제 코어를 정리합니다")
+        pass
     finally:
         node.destroy_node()
-        # Jazzy에서는 SIGINT 시 rclpy가 이미 shutdown을 호출한 상태일 수 있습니다.
-        # 중복 호출하면 RCLError가 나므로 컨텍스트가 살아있을 때만 정리합니다.
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":
