@@ -1,3 +1,0 @@
-[console_scripts]
-mock_core = rail_bridge.mock_core_node:main
-mock_sim = rail_bridge.mock_sim_node:main
