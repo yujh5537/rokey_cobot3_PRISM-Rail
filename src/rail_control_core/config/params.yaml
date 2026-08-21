@@ -8,9 +8,9 @@
 control_core_node:
   ros__parameters:
     mode: "B"            # A=선착순(FCFS) / B=선점형(PEDD)
-    publish_hz: 10.0     # 토픽 발행 주기(Hz) = 타이머 주기
-    speed_scale: 1.0     # 배속 (D 담당자 UI에서 조절)
-    auto_start: true     # 기동과 동시에 시나리오 진행
+    rate_hz: 30.0        # 틱·발행 주기(Hz). 엔진 DT(1/30)와 같아야 실시간 재생
+    speed_scale: 1.0     # 배속 — 타이머 1주기당 엔진 틱 수 (D 담당자 UI에서 조절)
+    autostart: true      # 기동과 동시에 시나리오 진행 (false 면 /sim_start 필요)
 
 # ---------- 엔진 파라미터 (scenario.PARAMS 를 덮어씀) ----------
 # 키 이름은 engine.py 가 읽는 이름과 정확히 일치해야 합니다.

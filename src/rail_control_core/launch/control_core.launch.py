@@ -3,6 +3,7 @@
 사용 예:
     ros2 launch rail_control_core control_core.launch.py
     ros2 launch rail_control_core control_core.launch.py mode:=A speed_scale:=2.0
+    ros2 launch rail_control_core control_core.launch.py autostart:=false   # 수동 시작
 """
 
 from ament_index_python.packages import get_package_share_directory
@@ -22,7 +23,10 @@ def generate_launch_description() -> LaunchDescription:
                               description="A=FCFS(비교군) / B=P-EDD 계단식 선점"),
         DeclareLaunchArgument("speed_scale", default_value="1.0",
                               description="시뮬레이션 배속"),
-        DeclareLaunchArgument("auto_start", default_value="true"),
+        DeclareLaunchArgument("autostart", default_value="true",
+                              description="기동과 동시에 시나리오 진행"),
+        DeclareLaunchArgument("rate_hz", default_value="30.0",
+                              description="틱·발행 주기(Hz) — 엔진 DT 와 맞춰 실시간"),
         DeclareLaunchArgument("log_level", default_value="info"),
     ]
 
@@ -36,7 +40,8 @@ def generate_launch_description() -> LaunchDescription:
             "config_dir": PathJoinSubstitution([share, "config"]),
             "mode": LaunchConfiguration("mode"),
             "speed_scale": LaunchConfiguration("speed_scale"),
-            "auto_start": LaunchConfiguration("auto_start"),
+            "autostart": LaunchConfiguration("autostart"),
+            "rate_hz": LaunchConfiguration("rate_hz"),
         }],
         arguments=["--ros-args", "--log-level", LaunchConfiguration("log_level")],
     )

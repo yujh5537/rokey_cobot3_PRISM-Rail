@@ -43,32 +43,62 @@ source install/setup.bash
 ## 실행
 
 ```bash
-# 기본 (모드 B = 선점형)
+# 기본 (모드 B = 선점형, 30Hz, 자동 시작)
 ros2 launch rail_control_core control_core.launch.py
 
 # 비교군 (모드 A = FCFS)
 ros2 launch rail_control_core control_core.launch.py mode:=A
 
-# 2배속 시연
-ros2 launch rail_control_core control_core.launch.py speed_scale:=2.0
+# 수동 시작 (시연 때 타이밍을 잡고 싶을 때)
+ros2 launch rail_control_core control_core.launch.py autostart:=false
+
+# 5배속 (타이머 1주기당 엔진 5틱)
+ros2 launch rail_control_core control_core.launch.py speed_scale:=5.0
 ```
 
-### 확인
+### 검증 체크리스트 (각각 새 터미널, `source install/setup.bash` 후)
 
 ```bash
-ros2 topic list
-ros2 topic echo /order_event
-ros2 topic echo /control_state --once | head -40
-ros2 topic hz /control_state          # 10Hz 나와야 정상
+ros2 topic hz /control_state         # 기대: ~30 Hz
+ros2 topic echo /order_event         # 기대: ORDER_RELEASE → ... → SIM_DONE
+ros2 topic echo /block_state --once --qos-durability transient_local --qos-reliability reliable
+                                     # 기대: 블록 30개 스냅샷 (늦게 켜도 마지막 상태 즉시 수신)
 ```
 
-### 시연 조작
+모드 B 완주 시 `[SIM_DONE] sim makespan=56.53` 로그가 나오면
+관제 코어–ROS 경계까지 전부 정상입니다.
+
+### 시연 조작 (전부 `std_srvs/srv/Trigger`)
 
 ```bash
-ros2 service call /code_red    std_srvs/srv/Trigger   # 🔴 Code Red 수동 발령
-ros2 service call /toggle_mode std_srvs/srv/Trigger   # 모드 A ↔ B
-ros2 service call /reset       std_srvs/srv/Trigger   # 리셋
+ros2 service call /sim_start    std_srvs/srv/Trigger   # 시작
+ros2 service call /sim_pause    std_srvs/srv/Trigger   # 일시정지
+ros2 service call /sim_reset    std_srvs/srv/Trigger   # 초기화 (t=0)
+ros2 service call /sim_status   std_srvs/srv/Trigger   # 현재 t·mode·오더 상태
+ros2 service call /sim_mode_a   std_srvs/srv/Trigger   # 모드 A 로 초기화
+ros2 service call /sim_mode_b   std_srvs/srv/Trigger   # 모드 B 로 초기화
+
+ros2 service call /code_crimson std_srvs/srv/Trigger   # 🔴 예약 P0 를 지금 발령
+ros2 service call /code_red     std_srvs/srv/Trigger   # 🔴 디포 유휴 캡슐로 추가 P0
 ```
+
+`/code_crimson` 은 시나리오의 예약 발령(8.0s)을 앞당기는 버튼이라 **이미 발령된 뒤에는
+사유와 함께 거부**합니다. 그 시점 이후에 P0 를 더 넣고 싶으면 `/code_red` 를 쓰세요.
+
+### QoS (수신측 필독 — B·C·D 공유)
+
+| 토픽 | QoS | 이유 |
+|---|---|---|
+| `/control_state` | BEST_EFFORT, depth 1 | 30Hz 스트림 — 최신값만 의미, 유실 허용 |
+| `/block_state` | RELIABLE + **TRANSIENT_LOCAL**, depth 1 | 변화 시에만 발행 — 늦게 켠 UI 도 마지막 상태 수신 |
+| `/order_event` | RELIABLE, depth 50 | 발표 근거 로그, 유실 불가 |
+| `/capsule_cmd` | RELIABLE, depth 50 | 캡슐 FSM 전이·선점 연출, 유실 불가 |
+| `/kpi` | RELIABLE + TRANSIENT_LOCAL, depth 1 | 완주 시 1회, 늦게 켜도 수신 |
+
+> ⚠️ **BEST_EFFORT 토픽을 RELIABLE 구독자로 받으면 매칭 실패로 아무것도 안 옵니다.**
+> `rqt` 나 커스텀 구독자에서 `/control_state` 가 안 보이면 구독 QoS 부터 확인하세요.
+
+페이로드 스키마 전문은 [`src/rail_bridge/rail_bridge/interface_schema.json`](../rail_bridge/rail_bridge/interface_schema.json).
 
 ---
 
@@ -79,16 +109,17 @@ cd ~/cobot3_ws/src/rail_control_core
 python3 -m pytest test/ -v
 ```
 
-**로직을 고칠 때마다 반드시 돌리세요.** 0.2초면 끝납니다.
+**로직을 고칠 때마다 반드시 돌리세요.** 0.3초면 끝나고, ROS 를 띄울 필요가 없습니다.
 
-검사 항목 (16개):
-- 회귀 기준값 (모드 A 53.9s / 모드 B 44.7s, P0 완료 시각)
-- 4가지 핵심 시연 장면 재현 여부
-- 블록 중복 점유 없음 (충돌 방지)
-- 전 오더 완료 (교착 방지)
-- 종료 후 자원 누수 없음
-- 오염/청결 동선 분리
-- 토폴로지 형상 (v3.1 FROZEN — 30블록, `docs/topology_spec.md` §2~§4)
+검사 항목 (15개):
+
+| 파일 | 개수 | 내용 |
+|---|---|---|
+| `test_regression.py` | 9 | §6-2 회귀 기준값(모드 A 46.90 / 모드 B P0 41.47), R8 안전망 불변식, 블록 중복 점유 없음, 전 오더 완료(교착 방지), `/block_state` 페이로드 스키마 |
+| `test_bridge.py` | 6 | 제어 명령(start/pause/reset/mode/status), 페이로드 스키마, 변화 시에만 발행, Code Crimson 즉시 발동·중복 거부, SIM_DONE 기준값 56.53, 모드 전환 리셋 |
+
+통합 중 문제가 생기면 **이 테스트 통과 여부로 책임을 가릅니다.**
+통과하면 관제 로직은 정상이고, 문제는 ROS 경계(빌드·QoS·네트워크)에 있습니다.
 
 ---
 
@@ -103,14 +134,20 @@ rail_control_core/
 │   ├── fsm.py                ← 3-FSM 상태 정의 + 데이터 모델
 │   ├── engine.py             ← 관제 두뇌 (ROS 무의존) ★핵심★
 │   ├── scenario.py           ← 시연 시나리오 v2 발령표 (명세서 §6-1)
-│   └── control_core_node.py  ← rclpy 래퍼 (판단 로직 없음)
+│   ├── bridge.py             ← 포트-어댑터 경계 (rclpy 무의존, 여기까지 테스트)
+│   └── control_core_node.py  ← rclpy 어댑터 (dict→JSON 변환만)
 ├── launch/control_core.launch.py
 ├── test/test_regression.py   ← §6-2 회귀 기준값 고정
+├── test/test_bridge.py       ← 노드 로직 (ROS 없이)
 └── tools/kpi_report.py       ← 모드 A/B 비교표 출력 (발표용)
 ```
 
-**설계 원칙: 판단은 `engine.py`에, ROS는 `control_core_node.py`에.**
-이 경계를 지키면 테스트가 빨라지고 B·C를 기다리지 않고 개발할 수 있습니다.
+**설계 원칙 (포트-어댑터): 판단은 `engine.py`·`bridge.py` 에, ROS 는 `control_core_node.py` 에.**
+
+`bridge.py` 는 rclpy 를 임포트하지 않습니다. 노드가 30Hz 로 `bridge.step()` 을 부르면
+발행할 dict 묶음을 돌려주고, 노드는 그걸 JSON 으로 바꿔 뿌리기만 합니다.
+덕분에 ROS 없이 노드 로직을 테스트할 수 있고, 통합 디버깅 때 관제 책임과
+ROS 경계 책임을 즉시 분리할 수 있습니다.
 
 ---
 

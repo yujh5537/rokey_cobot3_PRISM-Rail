@@ -1,39 +1,201 @@
 {
+  "_about": {
+    "version": "STEP3-FROZEN-2026-08-21",
+    "owner": "A(관제 코어)",
+    "encoding": "모든 토픽 std_msgs/msg/String, data 는 UTF-8 JSON 문자열",
+    "why_not_custom_msg": "커스텀 msg 는 4대 PC 전원 재빌드가 필요하고 rosbridge 로 D 에게 넘길 때 변환이 든다. 06c0783 에서 팀 합의로 rail_msgs 를 삭제하고 이 스키마로 동결했다.",
+    "compat_rule": "필드 추가는 하위 호환으로 허용(수신측은 모르는 키 무시). 필드 삭제·의미 변경은 버전 상향 + 팀 합의 필요.",
+    "qos_warning": "BEST_EFFORT 토픽을 RELIABLE 구독자로 받으면 매칭 실패로 아무것도 오지 않는다. 안 보이면 구독 QoS 부터 확인할 것.",
+    "sim_t": "모든 페이로드의 sim_t 는 시뮬레이션 경과 시간(초). 벽시계가 아니다."
+  },
   "topics": {
+    "/control_state": {
+      "type": "std_msgs/msg/String",
+      "qos": {
+        "reliability": "BEST_EFFORT",
+        "durability": "VOLATILE",
+        "depth": 1
+      },
+      "rate": "rate_hz(기본 30Hz) 매 틱",
+      "direction": "Core(A) -> Isaac Sim(B) · Bridge(C) · UI(D)",
+      "description": "전체 스냅샷. 수신측이 이벤트를 재조립할 필요 없이 이것만 봐도 현재 상태가 완성된다. 캡슐 위치(pos_m)는 블록 진입점 기준 진행 거리(m) — 월드 좌표 변환은 수신측 책임.",
+      "example": {
+        "sim_t": 12.4,
+        "kind": "control_state",
+        "mode": "B",
+        "running": true,
+        "orders": {
+          "O-4": {
+            "priority": 0,
+            "state": "EN_ROUTE",
+            "release": 8.0,
+            "due": 68.0,
+            "arrive": null,
+            "wait": 0.0,
+            "capsules": [
+              "C01",
+              "C02",
+              "C03",
+              "C04"
+            ]
+          }
+        },
+        "capsules": [
+          {
+            "capsule_id": "C01",
+            "block_id": "BB-09",
+            "pos_m": 3.4167,
+            "forward": true,
+            "state": "MOVING",
+            "order_id": "O-4"
+          }
+        ]
+      }
+    },
+    "/block_state": {
+      "type": "std_msgs/msg/String",
+      "qos": {
+        "reliability": "RELIABLE",
+        "durability": "TRANSIENT_LOCAL",
+        "depth": 1
+      },
+      "rate": "변화 시에만 (매 틱 아님)",
+      "direction": "Core(A) -> UI(D) · Isaac Sim(B)",
+      "description": "블록 30개 폐색 상태표 — 레일 색칠용. TRANSIENT_LOCAL 이라 늦게 켠 구독자도 마지막 스냅샷을 즉시 받는다.",
+      "example": {
+        "sim_t": 12.4,
+        "kind": "block_state",
+        "blocks": [
+          {
+            "block_id": "BB-09",
+            "state": "OCCUPIED",
+            "occupancy": 2,
+            "capacity": 4,
+            "locked": true,
+            "corridor": "C4",
+            "dir": 1,
+            "capsule_ids": [
+              "C01",
+              "C02"
+            ]
+          }
+        ]
+      },
+      "fields": {
+        "state": "FREE | RESERVED | OCCUPIED",
+        "locked": "P0 선점 파도(bow-wave)에 포함된 블록",
+        "corridor": "소속 회랑 C1~C6, 없으면 \"\"",
+        "dir": "회랑 통행 방향 +1 정방향 / -1 역방향 / 0 없음"
+      }
+    },
+    "/order_event": {
+      "type": "std_msgs/msg/String",
+      "qos": {
+        "reliability": "RELIABLE",
+        "durability": "VOLATILE",
+        "depth": 50
+      },
+      "rate": "이벤트 발생 시",
+      "direction": "Core(A) -> UI(D)",
+      "description": "발표 4장면의 근거 로그. 유실되면 안 되므로 RELIABLE depth 50.",
+      "event_values": [
+        "ORDER_RELEASE",
+        "ORDER_ARRIVE",
+        "CODE_CRIMSON",
+        "SIM_DONE"
+      ],
+      "example": {
+        "sim_t": 8.03,
+        "kind": "order_event",
+        "event": "ORDER_RELEASE",
+        "order_id": "O-4",
+        "priority": 0,
+        "item": "응급 수혈혈액(Code Crimson 콘보이)",
+        "state": "EN_ROUTE",
+        "code_red": true,
+        "detail": "P0"
+      }
+    },
     "/capsule_cmd": {
       "type": "std_msgs/msg/String",
-      "qos": "Reliable",
+      "qos": {
+        "reliability": "RELIABLE",
+        "durability": "VOLATILE",
+        "depth": 50
+      },
+      "rate": "상태 전이·선점 발생 시",
       "direction": "Core(A) -> Bridge(C) -> Isaac Sim(B)",
-      "description": "FSM 상태 변경(capsule_state) 또는 선점/대피 연출 이벤트(preempt)",
+      "description": "캡슐 FSM 전이(capsule_state) 와 선점·대피 연출 이벤트(preempt). kind 로 구분한다.",
       "examples": {
         "capsule_state": {
-          "t": 12.0,
+          "sim_t": 12.0,
           "kind": "capsule_state",
-          "capsule": "C-02",
+          "capsule": "C06",
           "order": "O-2",
           "from": "MOVING",
           "to": "YIELD_WAIT",
-          "node": "N-S2"
+          "block": "BB-01",
+          "node": "N-W1"
         },
         "preempt": {
-          "t": 20.0,
+          "sim_t": 20.0,
           "kind": "preempt",
           "action": "EVACUATE",
-          "by": "CR-1",
-          "target": "O-4",
+          "by": "O-4",
+          "target": "O-1",
+          "capsule": "C05",
           "block": "B2-07a",
           "siding": "B2-07b",
-          "reason": "Code Crimson 콘보이 회랑 확보를 위해 대피 레인으로 회피"
+          "reason": "Code Crimson 콘보이 회랑 확보를 위해 대피 레인으로 회피 (R3)"
         }
+      },
+      "action_values": [
+        "YIELD",
+        "EVACUATE",
+        "FINISH_ALLOWED",
+        "RESUME"
+      ]
+    },
+    "/kpi": {
+      "type": "std_msgs/msg/String",
+      "qos": {
+        "reliability": "RELIABLE",
+        "durability": "TRANSIENT_LOCAL",
+        "depth": 1
+      },
+      "rate": "완주 시 1회",
+      "direction": "Core(A) -> UI(D)",
+      "description": "명세서 §6-2 회귀 기준값과 같은 형식의 요약. 모드 B 는 makespan 56.53, P0 도착 41.47 이 기준값.",
+      "example": {
+        "kind": "kpi",
+        "mode": "B",
+        "makespan": 56.53,
+        "orders": {
+          "O-4": {
+            "priority": 0,
+            "arrive": 41.47,
+            "wait": 12.4
+          }
+        },
+        "arrival_order": [
+          "O-3",
+          "O-2",
+          "O-4",
+          "O-1"
+        ]
       }
     },
     "/capsule_pose": {
       "type": "std_msgs/msg/String",
-      "qos": "BestEffort",
-      "direction": "Bridge(C)/Isaac Sim(B) -> Core(A) & UI(D)",
-      "description": "실시간 캡슐 위치 및 블록 점유 텔레메트리",
+      "qos": {
+        "reliability": "BEST_EFFORT",
+        "durability": "VOLATILE",
+        "depth": 10
+      },
+      "direction": "Isaac Sim(B) / Bridge(C) -> Core(A) · UI(D)",
+      "description": "씬에서 올라오는 실제 캡슐 월드 좌표 텔레메트리. 관제 코어는 이것을 발행하지 않는다 (관제의 위치 출처는 /control_state).",
       "example": {
-        "capsule_id": "C-01",
+        "capsule_id": "C01",
         "current_block": "SB-UP",
         "node": "N-W1",
         "x": 0.5,
@@ -41,20 +203,17 @@
         "z": 2.0,
         "status": "MOVING"
       }
-    },
-    "/order_event": {
-      "type": "std_msgs/msg/String",
-      "qos": "Reliable",
-      "direction": "Core(A) -> UI(D)",
-      "example": {
-        "t": 20.0,
-        "kind": "order_event",
-        "order_id": "CR-1",
-        "priority": 0,
-        "item": "응급 수혈혈액(Code Crimson 콘보이)",
-        "state": "QUEUED",
-        "code_red": true
-      }
     }
+  },
+  "services": {
+    "_type": "std_srvs/srv/Trigger (커스텀 srv 없이 ack 를 받기 위해 명령당 하나씩)",
+    "/sim_start": "시나리오 진행 시작",
+    "/sim_pause": "일시정지 (시뮬 시간 정지)",
+    "/sim_reset": "현재 모드로 초기화 (t=0, start 필요)",
+    "/sim_status": "t·mode·running·오더 상태를 message 로 반환",
+    "/sim_mode_a": "모드 A(FCFS)로 초기화 — 비교군",
+    "/sim_mode_b": "모드 B(PEDD 선점)로 초기화",
+    "/code_crimson": "시나리오의 예약 P0 발령을 지금으로 앞당김. 이미 발령된 뒤면 사유와 함께 거부.",
+    "/code_red": "디포 유휴 캡슐로 추가 P0 오더를 새로 생성. 예약 P0 가 이미 나간 뒤에도 사용 가능."
   }
 }
