@@ -1,122 +1,105 @@
-"""
-topology.py — 레일 네트워크를 그래프로 읽어들이고 경로를 찾는 모듈.
-
-초보자용 설명
-------------
-'노드(Node)'는 캡슐이 설 수 있는 지점, '블록(Block)'은 노드와 노드를 잇는 구간입니다.
-레일 관제에서 가장 중요한 규칙은 딱 하나입니다.
-
-    "한 블록에는 캡슐이 동시에 1대만 들어갈 수 있다."
-
-이걸 폐색(Block) 제어라고 부르고, 충돌과 교착을 막는 최후의 안전망입니다.
-경로 탐색은 노드 10개짜리 아주 작은 그래프이므로 BFS(너비 우선 탐색)로 충분합니다.
-(A* / WHCA*는 노드가 수십 개로 늘어난 뒤에 도입해도 늦지 않습니다.)
+"""토폴로지 v3.1 (FROZEN) — docs/topology_spec.md §2~§4를 코드로 옮긴 데이터 모듈.
+블록 길이는 [가정]값. B 씬 좌표 확정 시 이 파일의 숫자만 교체하고 회귀 기준값 재측정.
 """
 
-from __future__ import annotations
+# 블록: id -> (node_a, node_b, length_m, capacity, oneway)
+# oneway=True 이면 a->b 방향으로만 주행 가능
+BLOCKS = {
+    # 층간
+    "SB-UP":  ("N-W1", "N-W2", 4.0, 4, True),
+    "SB-DN":  ("N-W2", "N-W1", 4.0, 4, True),
+    # B1F
+    "BB-01":  ("N-W1", "N-S1", 2.5, 1, False),
+    "BB-02":  ("N-S1", "N-S2", 2.9, 1, False),
+    "BB-03":  ("N-S2", "N-L1", 1.1, 1, False),
+    "BB-04a": ("N-L1", "N-L2", 3.1, 1, False),
+    "BB-04b": ("N-L1", "N-L2", 3.1, 3, False),   # 루프 A 대피 레인
+    "BB-05":  ("N-L2", "N-E1", 0.7, 1, False),
+    "BB-06a": ("N-E1", "N-L3", 1.1, 1, False),
+    "BB-06b": ("N-L3", "N-L4", 3.4, 1, False),
+    "BB-06c": ("N-L3", "N-L4", 3.4, 3, False),   # 루프 B 대피 레인
+    "BB-06d": ("N-L4", "N-D1", 1.7, 1, False),
+    "BB-07":  ("N-D1", "N-D2", 10.0, 10, False), # 디포 충전 존(추상화)
+    "BB-08":  ("N-D2", "N-B1", 5.7, 4, True),    # 출동 대기열(단방향)
+    "BB-09":  ("N-B1", "N-E1", 6.8, 4, False),   # 복귀선 겸 콘보이 출동 램프 (v3.1 확정: 용량 1->4, 팀 합의 2026-08-21)
+    "SP-INJ": ("N-S1", "ST-INJ", 3.3, 1, False),
+    "SP-PHM": ("N-S2", "ST-PHM", 3.3, 1, False),
+    # 2F
+    "B2-01":  ("N-W2", "N-S3", 2.5, 1, False),
+    "B2-02":  ("N-S3", "N-S4", 2.9, 1, False),
+    "B2-03":  ("N-S4", "N-L5", 1.1, 1, False),
+    "B2-04a": ("N-L5", "N-L6", 3.1, 1, False),
+    "B2-04b": ("N-L5", "N-L6", 3.1, 3, False),   # 루프 A2 대피 레인
+    "B2-05":  ("N-L6", "N-E2", 0.7, 1, False),
+    "B2-06":  ("N-E2", "N-L7", 1.1, 1, False),
+    "B2-07a": ("N-L7", "N-L8", 3.4, 1, False),
+    "B2-07b": ("N-L7", "N-L8", 3.4, 3, False),   # 루프 B2 대피 레인
+    "B2-08":  ("N-L8", "ST-OR1", 3.6, 1, False),
+    "B2-09":  ("N-E2", "ST-OR2", 3.7, 1, False),
+    "SP-CSR": ("N-S3", "ST-CSR", 3.3, 1, False),
+    "SP-ICU": ("N-S4", "ST-ICU", 3.3, 1, False),
+}
 
-from collections import deque
-from dataclasses import dataclass, field
-from pathlib import Path
+# 회랑(방향 토큰 단위): 교행 가능 지점 사이의 양방향 구간 묶음 (R8)
+CORRIDORS = {
+    "C1": ["BB-01", "BB-02", "BB-03"],
+    "C2": ["BB-05", "BB-06a"],
+    "C3": ["BB-06d"],
+    "C4": ["BB-09"],
+    "C5": ["B2-01", "B2-02", "B2-03"],
+    "C6": ["B2-05", "B2-06"],
+}
+BLOCK_TO_CORRIDOR = {b: c for c, bs in CORRIDORS.items() for b in bs}
 
-import yaml
+# 대피 레인: 직선 레인 <-> 대피 레인 상호 매핑 (R3)
+ESCAPE_LANE = {
+    "BB-04a": "BB-04b", "BB-06b": "BB-06c",
+    "B2-04a": "B2-04b", "B2-07a": "B2-07b",
+}
+
+# 경로 표기: (block_id, forward) — forward=True 는 node_a->node_b 방향
+ROUTES = {
+    # Code Crimson 콘보이: 대기열 -> 수술실 (OR1행 / OR2행)
+    "P0_OR1": [("BB-09", True), ("BB-05", False), ("BB-04a", False), ("BB-03", False),
+               ("BB-02", False), ("BB-01", False), ("SB-UP", True),
+               ("B2-01", True), ("B2-02", True), ("B2-03", True), ("B2-04a", True),
+               ("B2-05", True), ("B2-06", True), ("B2-07a", True), ("B2-08", True)],
+    "P0_OR2": [("BB-09", True), ("BB-05", False), ("BB-04a", False), ("BB-03", False),
+               ("BB-02", False), ("BB-01", False), ("SB-UP", True),
+               ("B2-01", True), ("B2-02", True), ("B2-03", True), ("B2-04a", True),
+               ("B2-05", True), ("B2-09", True)],
+    # P1 응급약품: 약제부 -> ICU
+    "P1_ICU": [("SP-PHM", False), ("BB-02", False), ("BB-01", False), ("SB-UP", True),
+               ("B2-01", True), ("B2-02", True), ("SP-ICU", True)],
+    # P2 항암제: 주사조제실 -> ICU
+    "P2_ICU": [("SP-INJ", False), ("BB-01", False), ("SB-UP", True),
+               ("B2-01", True), ("B2-02", True), ("SP-ICU", True)],
+    # P3 오염 기구 회수: 수술실1 -> CSR
+    "P3_CSR": [("B2-08", False), ("B2-07a", False), ("B2-06", False), ("B2-05", False),
+               ("B2-04a", False), ("B2-03", False), ("B2-02", False), ("SP-CSR", True)],
+}
 
 
-@dataclass
-class Block:
-    """레일 구간 하나. 상호배제(mutex) 자원으로 취급합니다."""
-    bid: str
-    frm: str
-    to: str
-    traverse_s: float
-    bottleneck: bool = False
-    allow_evacuate: bool = True     # False = 단선·중간 이탈 불가(수직 쉬프트)
-    forbid: list[str] = field(default_factory=list)
-    via: list[str] = field(default_factory=list)
-
-    def other_end(self, node: str) -> str:
-        """이 블록의 반대쪽 끝 노드를 돌려줍니다(양방향 레일 가정)."""
-        return self.to if node == self.frm else self.frm
+def entry_node(block_id: str, forward: bool) -> str:
+    a, b, *_ = BLOCKS[block_id]
+    return a if forward else b
 
 
-class Topology:
-    def __init__(self, path: str | Path):
-        data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-        self.meta: dict = data.get("meta", {})
-        self.nodes: dict[str, dict] = data["nodes"]
-        self.sidings: dict[str, str] = data.get("sidings", {})
+def exit_node(block_id: str, forward: bool) -> str:
+    a, b, *_ = BLOCKS[block_id]
+    return b if forward else a
 
-        self.blocks: dict[str, Block] = {}
-        for bid, b in data["blocks"].items():
-            self.blocks[bid] = Block(
-                bid=bid,
-                frm=b["from"],
-                to=b["to"],
-                traverse_s=float(b["traverse_s"]),
-                bottleneck=bool(b.get("bottleneck", False)),
-                allow_evacuate=bool(b.get("allow_evacuate", True)),
-                forbid=list(b.get("forbid", [])),
-                via=list(b.get("via", [])),
-            )
 
-        # 인접 리스트: node -> [(이웃노드, 블록id), ...]
-        self.adj: dict[str, list[tuple[str, str]]] = {n: [] for n in self.nodes}
-        for blk in self.blocks.values():
-            self.adj[blk.frm].append((blk.to, blk.bid))
-            self.adj[blk.to].append((blk.frm, blk.bid))
-
-    # ------------------------------------------------------------------
-    def find_path(self, start: str, goal: str, cargo_class: str = "clean") -> list[str]:
-        """start → goal 최단 경로를 '블록 id 리스트'로 반환합니다.
-
-        cargo_class 가 해당 블록의 forbid 목록에 있으면 그 블록은 지나갈 수 없습니다.
-        → 오염 기구 동선 분리를 '소프트웨어만으로' 구현하는 부분입니다.
-        경로가 없으면 빈 리스트를 반환합니다.
-        """
-        if start == goal:
-            return []
-
-        prev: dict[str, tuple[str, str]] = {}   # node -> (이전노드, 타고온 블록)
-        seen = {start}
-        q = deque([start])
-
-        while q:
-            cur = q.popleft()
-            for nxt, bid in self.adj[cur]:
-                if nxt in seen:
-                    continue
-                if cargo_class in self.blocks[bid].forbid:
-                    continue        # 금지 간선(Forbidden Edge)
-                seen.add(nxt)
-                prev[nxt] = (cur, bid)
-                if nxt == goal:
-                    return self._rebuild(prev, start, goal)
-                q.append(nxt)
-        return []
-
-    @staticmethod
-    def _rebuild(prev, start, goal) -> list[str]:
-        path, cur = [], goal
-        while cur != start:
-            cur, bid = prev[cur]
-            path.append(bid)
-        path.reverse()
-        return path
-
-    # ------------------------------------------------------------------
-    def eta(self, blocks: list[str]) -> float:
-        """블록 리스트를 전부 통과하는 데 걸리는 순수 주행시간."""
-        return sum(self.blocks[b].traverse_s for b in blocks)
-
-    def siding_of(self, node: str) -> str | None:
-        """이 노드에서 대피 명령을 받으면 빠질 지선 노드."""
-        return self.sidings.get(node)
-
-    def block_between(self, a: str, b: str) -> str | None:
-        for nxt, bid in self.adj.get(a, []):
-            if nxt == b:
-                return bid
-        return None
-
-    def node_name(self, nid: str) -> str:
-        return self.nodes.get(nid, {}).get("name", nid)
+def validate() -> list[str]:
+    """경로 무결성 자체 검증: 인접성 + 단방향 역주행 여부 (명세 §4 검증의 자동화)."""
+    errors = []
+    for name, route in ROUTES.items():
+        for i, (bid, fwd) in enumerate(route):
+            a, b, _, _, oneway = BLOCKS[bid]
+            if oneway and not fwd:
+                errors.append(f"{name}: {bid} 단방향 역주행")
+            if i > 0:
+                prev_bid, prev_fwd = route[i - 1]
+                if exit_node(prev_bid, prev_fwd) != entry_node(bid, fwd):
+                    errors.append(f"{name}: {route[i-1]} -> {route[i]} 불연속")
+    return errors

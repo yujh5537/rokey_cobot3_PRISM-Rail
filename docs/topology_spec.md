@@ -167,7 +167,7 @@
 | O-3 | P1 | ST-PHM→ST-ICU | 4.0 | 기본 | C07 (선배치) |
 | O-4 | P0 | Code Crimson 콘보이×4 → OR1/OR2 분산 | 8.0 | 기본 | C01~C04 (대기열) |
 
-### 6-2. 회귀 기준값 (2026-08-21 측정, 30Hz, ±0.2s 허용 — `tests/test_regression.py` 고정)
+### 6-2. 회귀 기준값 (2026-08-21 측정, 30Hz, ±0.2s 허용 — `src/rail_control_core/test/test_regression.py` 고정)
 
 | 지표 | 모드 A (FCFS) | 모드 B (PEDD 선점) | 효과 |
 |---|---|---|---|

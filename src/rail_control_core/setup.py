@@ -25,7 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'control_core = rail_control_core.control_core_node:main',
-            'sim = rail_control_core.engine:main',
+            'sim = rail_control_core.scenario:main',
         ],
     },
 )

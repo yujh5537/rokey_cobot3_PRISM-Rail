@@ -1,509 +1,396 @@
+"""관제 코어 엔진 — 4계층 알고리즘 구현 (순수 Python, ROS 무관).
+
+계층 매핑:
+  ① 배차: PEDD 정렬(우선순위→EDD) + 콘보이 슈퍼오더 (R1, R9)
+  ② 경로: 정적 경로 테이블(topology.ROUTES) — 탐색 없음
+  ③ 교통 제어: 블록 상호배제 + 차두 간격 + 회랑 방향 토큰 + 단방향 (R8)
+  ④ 긴급 대응: P0 회랑 선점 잠금(롤링 해제) + 3분기 스윕(R2 양보/R3 대피/R4 완주허용)
+모드 A(FCFS): ①의 정렬이 요청시각순, ④ 비활성. ③ 안전망은 양 모드 공통.
 """
-engine.py — 관제 코어의 두뇌. ROS2에 전혀 의존하지 않는 순수 파이썬 엔진입니다.
+from .fsm import Order, Capsule, OrderState, CapsuleState, BlockState
+from . import topology as T
 
-왜 ROS와 분리하나요?
---------------------
-ROS 노드 안에 로직을 다 넣으면 테스트할 때마다 ROS를 띄워야 해서 지옥이 됩니다.
-엔진을 순수 파이썬으로 빼두면
-  · `python3 -m rail_control_core.engine` 한 줄로 즉시 검증 가능
-  · pytest 회귀 테스트를 ROS 없이 0.1초 만에 돌릴 수 있음
-  · 나중에 ROS를 갈아끼워도 로직은 그대로
-이게 A(관제 코어) 담당자가 B·C를 기다리지 않고 혼자 진도를 뺄 수 있는 비결입니다.
-
-동작 방식
---------
-`step(dt)` 를 계속 호출하는 틱(tick) 기반 시뮬레이션입니다.
-한 틱에서 하는 일은 순서가 정해져 있습니다.
-
-  1. 오더 릴리스   : 발생 시각이 된 오더를 큐에 넣는다
-  2. 배차          : 유휴 캡슐에 큐 맨 앞 오더를 붙인다      (모드 A=FCFS / B=P-EDD)
-  3. 선점 판정     : 상위 오더의 경로를 막고 있는 하위 캡슐을 찾아 처분한다
-  4. 캡슐 전진     : 각 캡슐의 FSM을 한 스텝 진행시킨다
-  5. 이벤트 배출   : 바뀐 것들을 이벤트 리스트로 내보낸다
-"""
-
-from __future__ import annotations
-
-from dataclasses import dataclass
-from pathlib import Path
-
-import yaml
-
-from .fsm import (
-    BlockState,
-    Capsule,
-    CapsuleState,
-    Order,
-    OrderState,
-)
-from .topology import Topology
-
-DEFAULT_PARAMS = {
-    "mode": "B",
-    "tick_s": 0.1,
-    "load_s": 1.0,
-    "handover_s": 2.0,
-    "return_s": 2.0,
-    "runthrough_threshold_s": 12.0,
-    "evacuate_min_gap": 1,
-}
+DT = 1.0 / 30.0
 
 
-@dataclass
-class Event:
-    t: float
-    kind: str          # order_event | block_state | capsule_state | preempt | kpi
-    payload: dict
-
-    def as_dict(self) -> dict:
-        return {"t": round(self.t, 2), "kind": self.kind, **self.payload}
-
-
-class RailEngine:
-    # =================================================================
-    def __init__(self, topo: Topology, params: dict | None = None):
-        self.topo = topo
-        self.p = {**DEFAULT_PARAMS, **(params or {})}
-        self.mode: str = str(self.p["mode"]).upper()
-
-        self.now: float = 0.0
+class Engine:
+    def __init__(self, params: dict, mode: str = "B"):
+        self.p = params
+        self.mode = mode
+        self.t = 0.0
         self.orders: dict[str, Order] = {}
-        self.queue: list[Order] = []
         self.capsules: dict[str, Capsule] = {}
+        self.occ: dict[str, list[Capsule]] = {b: [] for b in T.BLOCKS}
+        self.corridor_dir: dict[str, int] = {c: 0 for c in T.CORRIDORS}
+        self.events: list[tuple[float, str, str, str]] = []
+        self._finish_logged: set[str] = set()
 
-        # 블록 FSM 상태 + 소유자
-        self.block_state: dict[str, BlockState] = {b: BlockState.FREE for b in topo.blocks}
-        self.block_owner: dict[str, str | None] = {b: None for b in topo.blocks}
+    # ---------- 조회 ----------
+    def speed(self, block_id: str, c=None) -> float:
+        v = self.p["speed_shaft"] if block_id.startswith("SB") else self.p["speed_default"]
+        if c is not None and c.order is not None and c.order.speed:
+            v = min(v, c.order.speed)
+        return v
 
-        self.events: list[Event] = []
-        self.log: list[str] = []
+    def remaining_blocks(self, c: Capsule) -> list[str]:
+        start = max(c.idx, 0)
+        return [b for b, _ in c.route[start:]]
 
-    # -----------------------------------------------------------------
-    # 초기화 헬퍼
-    # -----------------------------------------------------------------
-    def add_capsule(self, cid: str, node: str) -> Capsule:
-        cap = Capsule(cid=cid, node=node, home=node)
-        self.capsules[cid] = cap
-        return cap
-
-    def load_scenario(self, path: str | Path) -> None:
-        data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-        for o in data["orders"]:
-            self.add_order(Order(
-                oid=o["id"], priority=int(o["priority"]), item=o["item"],
-                origin=o["origin"], dest=o["dest"],
-                release_s=float(o["release_s"]), due_s=float(o["due_s"]),
-                cargo_class=o.get("cargo_class", "clean"),
-                code_red=bool(o.get("code_red", False)),
-                load_s=(float(o["load_s"]) if "load_s" in o else None),
-            ))
-
-    def add_order(self, order: Order) -> None:
-        self.orders[order.oid] = order
-        # 시나리오 오더는 출발지에 캡슐을 하나씩 배치 (MVP: 캡슐 = 오더 1:1)
-        cid = f"C-{order.oid.split('-')[-1]}"
-        if cid not in self.capsules:
-            self.add_capsule(cid, order.origin)
-
-    # =================================================================
-    # 메인 루프
-    # =================================================================
-    def step(self, dt: float | None = None) -> list[Event]:
-        dt = dt if dt is not None else float(self.p["tick_s"])
-        self.events = []
-        self.now += dt
-
-        self._release_orders()
-        self._dispatch()
-        if self.mode == "B":
-            self._preempt()
-        self._advance_capsules(dt)
-        return self.events
-
-    def run_until_done(self, limit_s: float = 600.0) -> float:
-        """모든 오더가 끝날 때까지 돌리고 makespan(마지막 완료 시각)을 반환."""
-        dt = float(self.p["tick_s"])
-        while self.now < limit_s and not self.all_done():
-            self.step(dt)
-        return self.makespan()
-
-    def all_done(self) -> bool:
-        return bool(self.orders) and all(
-            o.state == OrderState.DELIVERED for o in self.orders.values()
-        )
-
-    # =================================================================
-    # 1. 오더 릴리스
-    # =================================================================
-    def _release_orders(self) -> None:
+    def locked_blocks(self) -> set[str]:
+        """P0 선점 잠금 = ETA 기반 이동 파도(bow-wave).
+        콘보이가 yield_window(15s) 이내에 도달할 블록만 잠근다.
+        - R6: 미발령 오더 제외 (예지 버그 방지)
+        - 롤링 해제: 지나간 블록은 잔여 경로에서 빠져 자동 해제
+        - 원거리 블록은 잠그지 않아 하위 오더의 불필요한 대피/지연 방지"""
+        hot: set[str] = set()
+        w = self.p["yield_window_sec"]
         for o in self.orders.values():
-            if o.state == OrderState.CREATED and self.now >= o.release_s:
-                o.state = OrderState.QUEUED
-                self.queue.append(o)
-                self._emit("order_event", order_id=o.oid, state=o.state.value,
-                           priority=o.priority, item=o.item,
-                           origin=o.origin, dest=o.dest, code_red=o.code_red)
+            if o.prio == 0 and o.release_t <= self.t and o.state == OrderState.EN_ROUTE:
+                for cid in o.capsule_ids:
+                    c = self.capsules[cid]
+                    if c.state == CapsuleState.REMOVED:
+                        continue
+                    eta = 0.0
+                    if c.block is not None and c.idx >= 0:
+                        length = T.BLOCKS[c.block][2]
+                        eta += max(0.0, length - c.pos) / self.speed(c.block, c)
+                        if eta <= w:
+                            hot.add(c.block)
+                    for bid, _ in c.route[max(c.idx + 1, 0):]:
+                        if eta > w:
+                            break
+                        hot.add(bid)
+                        eta += T.BLOCKS[bid][2] / self.speed(bid, c)
+        return hot
 
-    # =================================================================
-    # 2. 배차 — 여기가 모드 A와 B가 갈리는 지점
-    # =================================================================
-    def _sort_queue(self) -> None:
-        if self.mode == "A":
-            # 모드 A: 선착순(FCFS). 우선순위를 아예 보지 않습니다. → 비교군
-            self.queue.sort(key=lambda o: (o.release_s, o.oid))
-        else:
-            # 모드 B: P-EDD. 등급 먼저, 같은 등급이면 마감 빠른 순.
-            self.queue.sort(key=lambda o: o.pedd_key)
+    def corridor_count(self, cor: str) -> int:
+        return sum(len(self.occ[b]) for b in T.CORRIDORS[cor])
 
-    def _dispatch(self) -> None:
-        self._sort_queue()
-        for o in list(self.queue):
-            cap = self._free_capsule_at(o.origin)
-            if cap is None:
-                continue
-            route = self.topo.find_path(o.origin, o.dest, o.cargo_class)
-            if not route:
-                self.log.append(f"[{self.now:6.1f}s] {o.oid} 경로 없음 {o.origin}->{o.dest}")
-                continue
 
-            self.queue.remove(o)
-            o.state = OrderState.ASSIGNED
-            o.assigned_capsule = cap.cid
-            o.start_s = self.now
-            cap.order = o
-            cap.route = route
-            cap.state = CapsuleState.LOADING
-            cap.timer = o.load_s if o.load_s is not None else float(self.p["load_s"])
-            self._emit("order_event", order_id=o.oid, state=o.state.value,
-                       capsule=cap.cid, route=route,
-                       eta_s=round(self.topo.eta(route), 1))
+    # ---------- 블록 FSM 스냅샷 ----------
+    def block_snapshot(self, locked: set[str] | None = None) -> dict[str, dict]:
+        """블록 상태 기계의 현재 상태표 — STEP 3의 /block_state 토픽 페이로드 원형.
+        FREE(여유) / RESERVED(선점 잠금·양보 대기 예약) / OCCUPIED(점유)."""
+        if locked is None:
+            locked = self.locked_blocks() if self.mode == "B" else set()
+        reserved = {c.route[c.idx + 1][0] for c in self.capsules.values()
+                    if c.state == CapsuleState.YIELD_WAIT and c.idx + 1 < len(c.route)}
+        snap = {}
+        for bid, (_, _, _, cap, _) in T.BLOCKS.items():
+            n = len(self.occ[bid])
+            if n > 0:
+                st = BlockState.OCCUPIED
+            elif bid in locked or bid in reserved:
+                st = BlockState.RESERVED
+            else:
+                st = BlockState.FREE
+            cor = T.BLOCK_TO_CORRIDOR.get(bid)
+            snap[bid] = {
+                "state": st.value,
+                "occupancy": n,
+                "capacity": cap,
+                "locked": bid in locked,
+                "corridor": cor,
+                "dir": self.corridor_dir[cor] if cor else 0,
+                "capsules": [c.cid for c in self.occ[bid]],
+            }
+        return snap
 
-    def _free_capsule_at(self, node: str) -> Capsule | None:
-        for c in self.capsules.values():
-            if c.state == CapsuleState.IDLE and c.node == node:
-                return c
-        return None
-
-    # =================================================================
-    # 3. 계단식 선점 (모드 B 전용) — 프로젝트의 핵심
-    # =================================================================
-    ACTIVE_STATES = (
-        CapsuleState.LOADING, CapsuleState.MOVING,
-        CapsuleState.RUN_THROUGH, CapsuleState.YIELD_WAIT,
-        CapsuleState.EVACUATING,
-    )
-
-    def wanted_by_higher(self, bid: str, prio: int, me: str) -> str | None:
-        """이 블록을 나보다 상위 등급 캡슐이 (지금 또는 곧) 필요로 하는가?
-
-        이것이 '예약 테이블'의 역할을 대신합니다. 상위 캡슐의 남은 경로 전체를
-        임시 긴급 회랑(Emergency Corridor)으로 보고, 하위는 그 안에 발을 들이지
-        않습니다. 상위 → 하위 방향으로만 양보하므로 교착(deadlock)이 생기지 않습니다.
-        """
-        for c in self.capsules.values():
-            if c.cid == me or c.order is None or c.state not in self.ACTIVE_STATES:
-                continue
-            if c.order.priority < prio and bid in c.remaining_blocks():
-                return c.order.oid
-        return None
-
-    def _preempt(self) -> None:
-        """상위 캡슐의 회랑을 '이미 점유하고 있는' 하위 캡슐을 처분한다.
-
-        처분은 3가지뿐이고, 고르는 기준은 물리적으로 무엇이 가능한가입니다.
-          (a) 아직 그 블록에 안 들어갔다   → YIELD_WAIT  (양보 대기)
-          (b) 들어갔는데 곧 나온다/이탈불가 → RUN_THROUGH (완주 허용) ※ 역주행 불가
-          (c) 들어갔고 오래 걸리며 지선 有 → EVACUATING  (대피)
-        """
-        actives = sorted(
-            [c for c in self.capsules.values()
-             if c.order and c.state in (CapsuleState.MOVING, CapsuleState.LOADING,
-                                        CapsuleState.YIELD_WAIT, CapsuleState.RUN_THROUGH)],
-            key=lambda c: c.order.pedd_key,
-        )
-        for hi in actives:
-            for bid in hi.remaining_blocks():
-                owner_cid = self.block_owner.get(bid)
-                if owner_cid in (None, hi.cid):
-                    continue
-                lo = self.capsules[owner_cid]
-                if lo.order is None or lo.order.priority <= hi.order.priority:
-                    continue
-                self._resolve_conflict(hi, lo, bid)
-
-    def _resolve_conflict(self, hi: Capsule, lo: Capsule, block_id: str) -> None:
-        blk = self.topo.blocks[block_id]
-
-        # (a) 아직 그 블록에 진입 전 → 양보 대기
-        if lo.cur_block != block_id:
-            if lo.state not in (CapsuleState.YIELD_WAIT, CapsuleState.EVACUATING):
-                self._set_capsule(lo, CapsuleState.YIELD_WAIT)
-                self._emit("preempt", action="YIELD_WAIT", by=hi.order.oid,
-                           target=lo.order.oid, block=block_id,
-                           reason="구간 진입 전이므로 정차 후 양보")
-            return
-
-        if lo.state in (CapsuleState.RUN_THROUGH, CapsuleState.EVACUATING):
-            return  # 이미 처분됨
-
-        remain = lo.remain_in_block(blk.traverse_s)
-        siding = self.topo.siding_of(blk.other_end(lo.node))
-        can_evac = blk.allow_evacuate and siding is not None
-
-        # (b) 잔여 통과시간이 짧거나, 애초에 중간 이탈이 불가능한 구간(수직 쉬프트)
-        if remain <= float(self.p["runthrough_threshold_s"]) or not can_evac:
-            self._set_capsule(lo, CapsuleState.RUN_THROUGH)
-            self._emit("preempt", action="RUN_THROUGH", by=hi.order.oid,
-                       target=lo.order.oid, block=block_id,
-                       remain_s=round(remain, 1),
-                       reason=("역주행·중간 이탈 불가 구간" if not can_evac
-                               else "잔여 통과시간이 짧아 통과가 더 빠름"))
-            return
-
-        # (c) 대피
-        lo.evac_target = siding
-        self._set_capsule(lo, CapsuleState.EVACUATING)
-        self._emit("preempt", action="EVACUATE", by=hi.order.oid,
-                   target=lo.order.oid, block=block_id, siding=siding,
-                   remain_s=round(remain, 1),
-                   reason="상위 화물의 목적 구간을 막고 있어 지선으로 회피")
-
-    # =================================================================
-    # 4. 캡슐 FSM 전진
-    # =================================================================
-    def _advance_capsules(self, dt: float) -> None:
-        for cap in self.capsules.values():
-            st = cap.state
-
-            if st == CapsuleState.IDLE:
-                continue
-
-            if st == CapsuleState.LOADING:
-                cap.timer -= dt
-                if cap.timer <= 0:
-                    cap.order.state = OrderState.RUNNING
-                    self._set_capsule(cap, CapsuleState.MOVING)
-                continue
-
-            if st in (CapsuleState.MOVING, CapsuleState.RUN_THROUGH):
-                self._move(cap, dt)
-                continue
-
-            if st == CapsuleState.YIELD_WAIT:
-                # 지연 비용 누적 — "선점은 공짜가 아니다"를 숫자로 만드는 지점
-                cap.order.wait_s += dt
-                if cap.cur_block is not None:
-                    self._move(cap, dt)          # 지금 있는 구간은 끝까지 빠져나온다
-                    continue
-                nxt = cap.route[0] if cap.route else None
-                if nxt and self.block_state[nxt] == BlockState.FREE \
-                        and not self.wanted_by_higher(nxt, cap.order.priority, cap.cid):
-                    self._set_capsule(cap, CapsuleState.MOVING)
-                    self._emit("preempt", action="RESUME", target=cap.order.oid,
-                               block=nxt, reason="상위 화물 통과 완료 → 자동 복구")
-                continue
-
-            if st == CapsuleState.EVACUATING:
-                cap.order.wait_s += dt
-                self._evacuate(cap, dt)
-                continue
-
-            if st == CapsuleState.HANDOVER:
-                cap.timer -= dt
-                if cap.timer <= 0:
-                    o = cap.order
-                    o.state = OrderState.DELIVERED
-                    o.finish_s = self.now
-                    self._emit("order_event", order_id=o.oid, state=o.state.value,
-                               lead_time_s=round(o.lead_time_s, 1),
-                               wait_s=round(o.wait_s, 1),
-                               slack_s=round(o.slack_s(self.now), 1),
-                               overdue=o.slack_s(self.now) < 0)
-                    cap.order = None
-                    self._set_capsule(cap, CapsuleState.RETURNING)
-                    cap.timer = float(self.p["return_s"])
-                continue
-
-            if st == CapsuleState.RETURNING:
-                cap.timer -= dt
-                if cap.timer <= 0:
-                    self._set_capsule(cap, CapsuleState.IDLE)
-                continue
-
-    # -----------------------------------------------------------------
-    def _move(self, cap: Capsule, dt: float) -> None:
-        # 블록에 아직 안 들어갔으면 진입 시도
-        if cap.cur_block is None:
-            if not cap.route:
-                self._arrive(cap)
-                return
-            nxt = cap.route[0]
-
-            # 상위 등급이 이 블록을 회랑으로 잡고 있으면 진입 금지(계단식 양보)
-            if self.mode == "B" and cap.state == CapsuleState.MOVING:
-                blocker = self.wanted_by_higher(nxt, cap.order.priority, cap.cid)
-                if blocker:
-                    self._set_capsule(cap, CapsuleState.YIELD_WAIT)
-                    self._emit("preempt", action="YIELD_WAIT", by=blocker,
-                               target=cap.order.oid, block=nxt,
-                               reason="구간 진입 전이므로 정차 후 양보")
-                    return
-
-            if not self._acquire_block(nxt, cap.cid):
-                cap.order.wait_s += dt          # 블록이 안 비어서 대기 → 이것도 지연
-                return
-            cap.cur_block = nxt
-            cap.block_elapsed = 0.0
-            self._emit("block_state", block=nxt, state=BlockState.OCCUPIED.value,
-                       capsule=cap.cid, order=cap.order.oid)
-            return
-
-        # 블록 안에서 전진
-        blk = self.topo.blocks[cap.cur_block]
-        cap.block_elapsed += dt
-        if cap.block_elapsed < blk.traverse_s:
-            return
-
-        # 블록 통과 완료
-        cap.node = blk.other_end(cap.node)
-        self._release_block(cap.cur_block, cap.cid)
-        cap.route.pop(0)
-        cap.cur_block = None
-        cap.block_elapsed = 0.0
-        if cap.state == CapsuleState.RUN_THROUGH:
-            self._set_capsule(cap, CapsuleState.MOVING)
-        if not cap.route:
-            self._arrive(cap)
-
-    def _arrive(self, cap: Capsule) -> None:
-        self._set_capsule(cap, CapsuleState.HANDOVER)
-        cap.timer = float(self.p["handover_s"])
-
-    def _evacuate(self, cap: Capsule, dt: float) -> None:
-        """지선으로 빠졌다가, 길이 열리면 원래 목적지로 다시 경로를 짜서 복귀합니다."""
-        if cap.cur_block is not None:          # 아직 본선 블록 안 → 일단 빠져나간다
-            self._move(cap, dt)
-            return
-
-        # 지선까지 아직 못 갔으면 지선 경로로 갈아탄다
-        if cap.evac_target and cap.node != cap.evac_target:
-            path = self.topo.find_path(cap.node, cap.evac_target, cap.order.cargo_class)
-            if path:
-                cap.route = path
-                self._move(cap, dt)
-            return
-
-        # 지선 도착 → 상위 화물이 다 지나갔는지 확인 후 재경로 산출
-        onward = self.topo.find_path(cap.node, cap.order.dest, cap.order.cargo_class)
-        if onward and not any(
-            self.wanted_by_higher(b, cap.order.priority, cap.cid) for b in onward
-        ):
-            cap.route = onward
-            cap.evac_target = None
-            self._set_capsule(cap, CapsuleState.MOVING)
-            self._emit("preempt", action="RESUME", target=cap.order.oid,
-                       reason="상위 화물 통과 완료 → 대피지점에서 본선 복귀")
-
-    # =================================================================
-    # 블록 자원 관리
-    # =================================================================
-    def _acquire_block(self, bid: str, cid: str) -> bool:
-        if self.block_state[bid] == BlockState.FREE or self.block_owner[bid] == cid:
-            self.block_state[bid] = BlockState.OCCUPIED
-            self.block_owner[bid] = cid
+    # ---------- 회랑 토큰 ----------
+    def corridor_ok(self, block_id: str, fwd: bool) -> bool:
+        cor = T.BLOCK_TO_CORRIDOR.get(block_id)
+        if cor is None:
             return True
+        want = 1 if fwd else -1
+        if self.corridor_count(cor) == 0:
+            return True
+        return self.corridor_dir[cor] == want
+
+    def _corridor_update_on_enter(self, block_id: str, fwd: bool):
+        cor = T.BLOCK_TO_CORRIDOR.get(block_id)
+        if cor is not None:
+            self.corridor_dir[cor] = 1 if fwd else -1
+
+    def on_wave(self, c: Capsule, locked: set[str]) -> bool:
+        """캡슐이 선점 파도의 경로 위에 있는가 (블록 일치 또는 회랑 공유)."""
+        if c.block is None:
+            return False
+        if c.block in locked:
+            return True
+        cor = T.BLOCK_TO_CORRIDOR.get(c.block)
+        return cor is not None and any(T.BLOCK_TO_CORRIDOR.get(b) == cor for b in locked)
+
+    # ---------- 진입 판정 ----------
+    def can_enter(self, c: Capsule, block_id: str, fwd: bool, locked: set[str],
+                  ignore_prio: bool = False) -> tuple[bool, str]:
+        a, b, length, cap, oneway = T.BLOCKS[block_id]
+        if oneway and not fwd:
+            return False, "oneway"
+        occ = self.occ[block_id]
+        if len(occ) >= cap:
+            return False, "capacity"
+        if occ:
+            same_dir = all(o.fwd == fwd for o in occ)
+            if not same_dir:
+                return False, "headon"
+            tail = occ[-1]
+            if tail.pos < self.p["pitch"]:
+                return False, "headway"
+        if not self.corridor_ok(block_id, fwd):
+            return False, "corridor"
+        if self.mode == "B" and not ignore_prio:
+            prio = c.order.prio if c.order else 9
+            # R4 일반화: 이미 잠금 구간 위에 있으면 다음 잠금 블록으로의 '탈출 전진' 허용
+            if prio > 0 and block_id in locked and not self.on_wave(c, locked):
+                return False, "locked"
+            if prio > 0 and self._yield_needed(c, block_id):
+                return False, "yield_window"
+        return True, "ok"
+
+    def _yield_needed(self, c: Capsule, block_id: str) -> bool:
+        """R5: 상위 캡슐이 yield_window 내에 이 블록을 필요로 하면 진입 보류.
+        R6: 미발령(release_t > t) 오더는 검사 제외.
+        보완: 내 현재 위치(블록/회랑)가 상위의 잔여 경로에 걸치면 양보하지 않고
+        계속 전진해 길을 비운다 (제자리 대기가 상위를 막는 역효과 방지)."""
+        my_prio = c.order.prio if c.order else 9
+        my_cor = T.BLOCK_TO_CORRIDOR.get(c.block) if c.block else None
+        for other in self.capsules.values():
+            if other is c or other.order is None or other.state == CapsuleState.REMOVED:
+                continue
+            o = other.order
+            if o.prio >= my_prio or o.release_t > self.t:
+                continue
+            rem_all = self.remaining_blocks(other)
+            if c.block in rem_all:
+                continue  # 나는 상위 경로 위 -> 전진해서 비켜야 함
+            if my_cor and any(T.BLOCK_TO_CORRIDOR.get(b) == my_cor for b in rem_all):
+                continue  # 내 회랑을 상위가 쓸 예정 -> 전진해서 회랑을 비움
+            rem = other.remaining_from_current(block_id)
+            if rem is not None and self._eta(other, rem) <= self.p["yield_window_sec"]:
+                return True
+            # 회랑 단위 검사: 진입하려는 블록의 회랑을 상위가 창 내에 통과 예정이면 보류
+            tcor = T.BLOCK_TO_CORRIDOR.get(block_id)
+            if tcor:
+                for b in rem_all:
+                    if T.BLOCK_TO_CORRIDOR.get(b) == tcor:
+                        rem2 = other.remaining_from_current(b)
+                        if rem2 is not None and self._eta(other, rem2) <= self.p["yield_window_sec"]:
+                            return True
+                        break
         return False
 
-    def _release_block(self, bid: str, cid: str) -> None:
-        if self.block_owner.get(bid) == cid:
-            self.block_state[bid] = BlockState.FREE
-            self.block_owner[bid] = None
-            self._emit("block_state", block=bid, state=BlockState.FREE.value, capsule=None)
+    def _eta(self, c: Capsule, blocks_until: list[str]) -> float:
+        eta = 0.0
+        if c.block is not None and c.idx >= 0:
+            _, _, length, _, _ = T.BLOCKS[c.block]
+            eta += max(0.0, length - c.pos) / self.speed(c.block, c)
+        for b in blocks_until:
+            eta += T.BLOCKS[b][2] / self.speed(b, c)
+        return eta
 
-    # =================================================================
-    # 유틸
-    # =================================================================
-    def _set_capsule(self, cap: Capsule, new: CapsuleState) -> None:
-        if cap.state == new:
-            return
-        old, cap.state = cap.state, new
-        self._emit("capsule_state", capsule=cap.cid,
-                   order=cap.order.oid if cap.order else None,
-                   frm=old.value, to=new.value, node=cap.node)
+    def _wave_opposes(self, nbid: str, nfwd: bool) -> bool:
+        """다음 블록에서 P0 파도와 역방향으로 만나는가 (True면 대피가 정답)."""
+        for o in self.orders.values():
+            if o.prio != 0 or o.state != OrderState.EN_ROUTE or o.release_t > self.t:
+                continue
+            for cid in o.capsule_ids:
+                c = self.capsules[cid]
+                if c.state == CapsuleState.REMOVED:
+                    continue
+                for bid, f in c.route[max(c.idx, 0):]:
+                    if bid == nbid and f != nfwd:
+                        return True
+        return False
 
-    def _emit(self, kind: str, **payload) -> None:
-        ev = Event(t=self.now, kind=kind, payload=payload)
-        self.events.append(ev)
-        self.log.append(f"[{self.now:6.1f}s] {kind:<14} {payload}")
+    # ---------- 전이 실행 ----------
+    def _do_enter(self, c: Capsule, block_id: str, fwd: bool):
+        if c.block is not None and c in self.occ[c.block]:
+            self.occ[c.block].remove(c)
+        c.block, c.fwd, c.pos = block_id, fwd, 0.0
+        self.occ[block_id].append(c)
+        self._corridor_update_on_enter(block_id, fwd)
+        c.req_t = float("inf")
 
-    # ---------------- KPI ----------------
-    def makespan(self) -> float:
-        fin = [o.finish_s for o in self.orders.values() if o.finish_s is not None]
-        return max(fin) if fin else float("inf")
+    def _try_evacuate(self, c: Capsule, next_bid: str, next_fwd: bool, locked: set[str]) -> bool:
+        """R3: 다음 블록이 선점 잠금이고 내가 잠금 경로 위에 있으면 대피 시도."""
+        if c.block not in locked:
+            return False
+        # 상위 활성 오더들의 목적지(최종 블록)는 대피지에서 제외
+        my_prio = c.order.prio if c.order else 9
+        superior_dest = {self.capsules[cid].route[-1][0]
+                         for o in self.orders.values() if o.prio < my_prio
+                         and o.state == OrderState.EN_ROUTE
+                         for cid in o.capsule_ids}
+        # 1순위: 다음 블록의 대피 레인(같은 분기점에서 진입 가능)
+        esc = T.ESCAPE_LANE.get(next_bid)
+        if esc and esc not in locked:
+            ok, _ = self.can_enter(c, esc, next_fwd, locked, ignore_prio=True)
+            if ok:
+                c.route[c.idx + 1] = (esc, next_fwd)
+                self.log("EVAC_LANE", c.cid, f"{c.block}->{esc}")
+                return True
+        # 2순위: 진출 노드에 접한 빈 지선/반대 레인으로 후퇴 대기 후 복귀(왕복 삽입)
+        node = T.exit_node(c.block, c.fwd)
+        for bid, (a, b, _, _, oneway) in T.BLOCKS.items():
+            if bid in locked or oneway or bid == c.block or bid in superior_dest:
+                continue
+            into = True if a == node else (False if b == node else None)
+            if into is None or T.BLOCK_TO_CORRIDOR.get(bid):
+                continue
+            if bid in (r[0] for r in c.route):
+                continue
+            ok, _ = self.can_enter(c, bid, into, locked, ignore_prio=True)
+            if ok:
+                c.route[c.idx + 1:c.idx + 1] = [(bid, into), (bid, not into)]
+                self.log("EVAC_SPUR", c.cid, f"{c.block}->{bid}")
+                return True
+        return False
 
-    def kpi(self) -> dict:
-        done = [o for o in self.orders.values() if o.finish_s is not None]
-        lead = [o.lead_time_s for o in done]
+    # ---------- 메인 틱 ----------
+    def tick(self):
+        self.t += DT
+        locked = self.locked_blocks() if self.mode == "B" else set()
+
+        # 오더 발령
+        for o in self.orders.values():
+            if o.state == OrderState.CREATED and o.release_t <= self.t:
+                o.state = OrderState.EN_ROUTE
+                self.log("ORDER_RELEASE", o.oid, f"P{o.prio}")
+                for cid in o.capsule_ids:
+                    c = self.capsules[cid]
+                    if c.state in (CapsuleState.QUEUED, CapsuleState.STANDBY):
+                        c.state = CapsuleState.MOVING
+
+        # 이동 + 하역
+        for c in self.capsules.values():
+            if c.state == CapsuleState.UNLOADING and self.t >= c.unload_until:
+                c.state = CapsuleState.REMOVED
+                if c.block and c in self.occ[c.block]:
+                    self.occ[c.block].remove(c)
+                    c.block = None
+                self._check_order_done(c.order)
+            if c.state not in (CapsuleState.MOVING, CapsuleState.FINISHING,
+                               CapsuleState.EVACUATED):
+                continue
+            if c.block is None:
+                continue
+            _, _, length, _, _ = T.BLOCKS[c.block]
+            limit = length
+            occ = self.occ[c.block]
+            i = occ.index(c)
+            if i > 0:
+                limit = min(limit, occ[i - 1].pos - self.p["pitch"])
+            c.pos = min(c.pos + self.speed(c.block, c) * DT, max(limit, c.pos))
+            if self.mode == "B" and c.block in locked and c.order and c.order.prio > 0 \
+               and c.cid not in self._finish_logged and c.pos < length:
+                self._finish_logged.add(c.cid)
+                c.state = CapsuleState.FINISHING
+                self.log("FINISH_ALLOWED", c.cid, c.block)
+
+        # 진입 요청 수집
+        requests: list[Capsule] = []
+        for c in self.capsules.values():
+            if c.state in (CapsuleState.REMOVED, CapsuleState.UNLOADING,
+                           CapsuleState.DOCKED, CapsuleState.STANDBY, CapsuleState.QUEUED):
+                continue
+            if c.block is None:
+                continue
+            _, _, length, _, _ = T.BLOCKS[c.block]
+            at_end = c.pos >= length - 1e-9
+            if not at_end:
+                continue
+            if c.idx + 1 >= len(c.route):
+                self._arrive(c)
+                continue
+            if c.req_t == float("inf"):
+                c.req_t = self.t
+            requests.append(c)
+
+        # 중재 정렬: 모드 B = (우선순위, EDD, 요청시각) / 모드 A = 요청시각
+        if self.mode == "B":
+            requests.sort(key=lambda c: (c.order.prio, c.order.due_t, c.req_t))
+        else:
+            requests.sort(key=lambda c: c.req_t)
+
+        for c in requests:
+            nbid, nfwd = c.route[c.idx + 1]
+            # 지선 왕복: 같은 블록의 역방향 전이는 재진입이 아니라 제자리 방향 전환
+            if nbid == c.block and nfwd != c.fwd:
+                _, _, length, _, _ = T.BLOCKS[c.block]
+                c.fwd, c.pos = nfwd, max(0.0, length - c.pos)
+                c.idx += 1
+                c.req_t = float("inf")
+                continue
+            prio = c.order.prio if c.order else 9
+            # R3 우선: 잠금 경로 위에 있고 다음도 잠금이면 대피 시도 (실패 시 R4 플러시)
+            if self.mode == "B" and prio > 0 and nbid in locked \
+               and self.on_wave(c, locked) and c.state != CapsuleState.EVACUATED \
+               and self._wave_opposes(nbid, nfwd):
+                if self._try_evacuate(c, nbid, nfwd, locked):
+                    nbid2, nfwd2 = c.route[c.idx + 1]
+                    ok2, _ = self.can_enter(c, nbid2, nfwd2, locked, ignore_prio=True)
+                    if ok2:
+                        c.idx += 1
+                        self._do_enter(c, nbid2, nfwd2)
+                        c.state = CapsuleState.EVACUATED
+                        c.detour = nbid2
+                    continue
+            ok, reason = self.can_enter(c, nbid, nfwd, locked)
+            if ok:
+                if c.state in (CapsuleState.YIELD_WAIT, CapsuleState.EVACUATED):
+                    self.log("RESUME", c.cid, nbid)
+                    c.detour = None
+                c.idx += 1
+                self._do_enter(c, nbid, nfwd)
+                c.state = CapsuleState.MOVING
+            else:
+                if c.state == CapsuleState.MOVING:
+                    c.state = CapsuleState.YIELD_WAIT
+                    self.log("YIELD", c.cid, f"{nbid}:{reason}")
+                if c.order:
+                    c.order.wait_total += DT
+
+    def _arrive(self, c: Capsule):
+        c.state = CapsuleState.UNLOADING
+        c.unload_until = self.t + self.p["unload_sec"]
+        self.log("ARRIVE", c.cid, c.block or "?")
+        o = c.order
+        if o and all(self.capsules[x].state in (CapsuleState.UNLOADING, CapsuleState.REMOVED)
+                     for x in o.capsule_ids):
+            if o.arrive_t is None:
+                o.arrive_t = self.t
+                o.state = OrderState.ARRIVED
+                self.log("ORDER_ARRIVE", o.oid, f"t={self.t:.2f}")
+
+    def _check_order_done(self, o: Order | None):
+        if o and all(self.capsules[x].state == CapsuleState.REMOVED for x in o.capsule_ids):
+            o.state = OrderState.DONE
+
+    def log(self, ev: str, subj: str, detail: str):
+        self.events.append((round(self.t, 2), ev, subj, detail))
+
+    def run(self, until: float = 300.0) -> dict:
+        while self.t < until:
+            self.tick()
+            if all(o.state == OrderState.DONE for o in self.orders.values()):
+                break
+        else:
+            raise RuntimeError(f"타임아웃/교착 의심: t={self.t:.1f} "
+                               + str({c.cid: (c.block, c.state.value) for c in self.capsules.values()}))
         return {
-            "mode": self.mode,
-            "makespan_s": round(self.makespan(), 1) if done else None,
-            "avg_lead_time_s": round(sum(lead) / len(lead), 1) if lead else None,
-            "p0_lead_time_s": next(
-                (round(o.lead_time_s, 1) for o in done if o.priority == 0), None),
-            "total_wait_s": round(sum(o.wait_s for o in self.orders.values()), 1),
-            "overdue_orders": [o.oid for o in done if o.finish_s > o.due_s],
-            "per_order": {
-                o.oid: {
-                    "P": o.priority,
-                    "lead_s": round(o.lead_time_s, 1) if o.lead_time_s else None,
-                    "wait_s": round(o.wait_s, 1),
-                }
-                for o in sorted(self.orders.values(), key=lambda x: x.oid)
-            },
+            "makespan": round(max(o.arrive_t for o in self.orders.values()), 2),
+            "orders": {o.oid: {"arrive": round(o.arrive_t, 2),
+                               "wait": round(o.wait_total, 2)} for o in self.orders.values()},
         }
 
-    def snapshot(self) -> dict:
-        """UI(D 담당자)에게 통째로 넘길 현재 상태."""
-        return {
-            "t": round(self.now, 2),
-            "mode": self.mode,
-            "blocks": {b: {"state": s.value, "owner": self.block_owner[b]}
-                       for b, s in self.block_state.items()},
-            "capsules": {c.cid: {"state": c.state.value, "node": c.node,
-                                 "order": c.order.oid if c.order else None,
-                                 "block": c.cur_block}
-                         for c in self.capsules.values()},
-            "orders": {o.oid: {"state": o.state.value, "P": o.priority,
-                               "wait_s": round(o.wait_s, 1),
-                               "slack_s": round(o.slack_s(self.now), 1)}
-                       for o in self.orders.values()},
-        }
+
+# Capsule 헬퍼 (엔진에서 사용)
+def _remaining_from_current(self: Capsule, block_id: str):
+    start = max(self.idx + 1, 0)
+    ids = [b for b, _ in self.route[start:]]
+    if block_id not in ids:
+        return None
+    return ids[:ids.index(block_id)]
 
 
-# =====================================================================
-# 단독 실행: python3 -m rail_control_core.engine
-# =====================================================================
-def build_engine(mode: str = "B", cfg_dir: str | Path | None = None) -> RailEngine:
-    cfg = Path(cfg_dir) if cfg_dir else Path(__file__).resolve().parent.parent / "config"
-    topo = Topology(cfg / "topology.yaml")
-    params = yaml.safe_load((cfg / "params.yaml").read_text(encoding="utf-8"))
-    p = params["control_core_node"]["ros__parameters"]
-    p["mode"] = mode
-    eng = RailEngine(topo, p)
-    eng.load_scenario(cfg / "scenario_main.yaml")
-    return eng
-
-
-def main() -> None:
-    for mode in ("A", "B"):
-        eng = build_engine(mode)
-        eng.run_until_done()
-        print(f"\n{'='*62}\n  모드 {mode}  ({'FCFS·선점없음' if mode=='A' else 'P-EDD·계단식 선점'})\n{'='*62}")
-        for line in eng.log:
-            if any(k in line for k in ("preempt", "order_event")):
-                print(" ", line)
-        print("  KPI:", eng.kpi())
-
-
-if __name__ == "__main__":
-    main()
+Capsule.remaining_from_current = _remaining_from_current

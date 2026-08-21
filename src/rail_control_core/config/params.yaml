@@ -1,35 +1,46 @@
 # =============================================================
-#  관제 코어 파라미터 (A. 관제 코어 1일차 산출물)
-#  ROS2 노드에서는 control_core_node 아래 ros__parameters 로 읽힙니다.
+#  관제 코어 파라미터 — 토폴로지 명세서 v3.1 §7 과 동기화
+#  한쪽만 고치지 마세요. 값을 바꾸면 회귀 기준값(§6-2 / test/test_regression.py)
+#  을 재측정한 뒤 명세서·테스트를 함께 갱신해야 합니다.
 # =============================================================
+
+# ---------- ROS 노드 자체 설정 ----------
 control_core_node:
   ros__parameters:
+    mode: "B"            # A=선착순(FCFS) / B=선점형(PEDD)
+    publish_hz: 10.0     # 토픽 발행 주기(Hz) = 타이머 주기
+    speed_scale: 1.0     # 배속 (D 담당자 UI에서 조절)
+    auto_start: true     # 기동과 동시에 시나리오 진행
 
-    # ---------- 모드 스위치 (4일차 과제: 모드 A/B 전환 파라미터화) ----------
-    # A = 선착순(FCFS), 선점 없음  →  "기존 방식" 비교군
-    # B = P-EDD 정렬 + 계단식 선점 →  "우리 방식"
-    mode: "B"
+# ---------- 엔진 파라미터 (scenario.PARAMS 를 덮어씀) ----------
+# 키 이름은 engine.py 가 읽는 이름과 정확히 일치해야 합니다.
+engine:
+  speed_default: 1.5     # m/s — 일반 구간
+  speed_shaft: 1.0       # m/s — 수직 쉬프트(SB-*)
+  pitch: 0.9             # m — 캡슐 점유 피치 (길이 0.6 + 안전간격 0.3) [가정]
+  yield_window_sec: 15.0 # P0 선점 잠금 파도(bow-wave) 폭
+  unload_sec: 2.0        # 목적지 하역 소요
+  priority_due_sec:      # EDD 마감 = 발령시각 + 이 값
+    0: 60                # P0 (Code Crimson)
+    1: 180               # P1
+    2: 600               # P2
+    3: 1800              # P3
 
-    # ---------- 시간 파라미터 ----------
-    tick_s: 0.1            # 시뮬레이션 1스텝 = 0.1초
-    speed_scale: 1.0       # 배속 (D 담당자 UI에서 조절)
-    load_s: 1.0            # 적재 소요시간
-    handover_s: 2.0        # 하역·인계 소요시간
-    return_s: 2.0          # 공 캡슐 회송 처리시간
+# ---------- 참고: 명세서 §7 의 나머지 항목 (현재 코드가 읽지 않는 문서값) ----------
+# 토폴로지 상수(블록 길이·용량)는 rail_control_core/topology.py 에 하드코딩되어
+# 있습니다. B 담당자의 씬 좌표 확정 시 topology.py 의 숫자를 고치고
+# 회귀 기준값을 재측정하세요.
+reference:
+  capsule: { count: 10, length_m: 0.6, gap_m: 0.3 }
+  convoy: { size: 4, headway_rule: "block" }
+  depot: { dock_count: 10 }
+  queue: { blood_bank_capacity: 4, launch_ramp_bb09_capacity: 4 }  # v3.1
+  placement: { queue_standby: 4, depot_idle: 6 }
+  sim: { tick_rate_hz: 30, accel_limit: 0.8 }
+  p0_codename: "CODE_CRIMSON"
 
-    # ---------- 선점 규칙 파라미터 ----------
-    # 이미 블록에 진입한 캡슐의 잔여 통과시간이 이 값 이하면 "완주 허용",
-    # 초과하면 대피/양보를 검토합니다. (레일은 역주행 불가!)
-    runthrough_threshold_s: 7.5
-
-    # 선점 대상 캡슐과 선점하는 캡슐의 등급 차이가 이 값 이상일 때만 대피 명령
-    evacuate_min_gap: 1
-
-    # ---------- 회귀 테스트 기준값 (2일차 과제) ----------
-    # 발표자료 기준값. 코드를 고친 뒤에도 이 값이 유지되어야 "회귀 없음".
-    baseline_mode_a_s: 54.3
-    baseline_mode_b_s: 44.2
-    baseline_tolerance_s: 0.5
-
-    # ---------- 발행 주기 ----------
-    publish_hz: 10.0
+# ---------- 회귀 기준값 (명세서 §6-2, 2026-08-21 측정) ----------
+baseline:
+  mode_a_makespan_s: 46.90
+  mode_b_p0_arrive_s: 41.47
+  tolerance_s: 0.2
