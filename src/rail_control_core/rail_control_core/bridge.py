@@ -4,9 +4,10 @@
 msg로 변환만 한다. 판단 로직 전부가 여기 있으므로 ROS 없이 단위 테스트 가능하고,
 통합 시 문제가 생기면 "브리지 테스트 통과 여부"로 관제/연동 책임을 즉시 분리할 수 있다.
 """
+from . import geometry as G
+from . import scenario
 from .engine import DT, Engine
 from .fsm import CapsuleState, OrderState
-from . import scenario
 
 
 class Bridge:
@@ -83,14 +84,35 @@ class Bridge:
         return out
 
     def _capsule_payload(self) -> list[dict]:
-        return [{
+        return [{**self._logical(c), **self._xyz(c)}
+                for c in self.eng.capsules.values()]
+
+    @staticmethod
+    def _logical(c) -> dict:
+        return {
             "capsule_id": c.cid,
             "block_id": c.block or "",
             "pos_m": round(c.pos, 4),
             "forward": bool(c.fwd),
             "state": c.state.value,
             "order_id": c.order.oid if c.order else "",
-        } for c in self.eng.capsules.values()]
+        }
+
+    @staticmethod
+    def _xyz(c) -> dict:
+        """씬 월드 좌표 — 위치의 진실 소스는 코어라는 합의(2026-08-21)에 따라
+        코어가 계산해서 실어 보낸다. 브릿지는 프림 트랜스폼에 꽂기만 하면 된다.
+
+        - DOCKED: 디포 측면 가상 슬롯 (B 도크 좌표 회신 시 geometry 만 수정)
+        - REMOVED: 블록이 없으므로 원점. 수신측은 이 상태에서 프림을 숨긴다.
+        """
+        if c.state == CapsuleState.DOCKED:
+            x, y, z = G.dock_slot_xyz(int(c.cid[1:]) - 1)
+        elif c.block:
+            x, y, z = G.pose_to_xyz(c.block, c.pos, bool(c.fwd))
+        else:
+            x, y, z = 0.0, 0.0, 0.0
+        return {"x": x, "y": y, "z": z}
 
     def _block_payload(self) -> list[dict]:
         snap = self.eng.block_snapshot()

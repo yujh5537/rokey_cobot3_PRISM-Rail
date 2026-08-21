@@ -10,11 +10,17 @@ ROS 경계 책임(빌드·QoS·네트워크)을 즉시 분리할 수 있습니�
 
 발행 (std_msgs/String, 페이로드는 JSON)
 --------------------------------------
-  /control_state  BEST_EFFORT  depth 1   rate_hz(기본 30Hz) 전체 스냅샷
+  /capsule_pose   BEST_EFFORT  depth 1   rate_hz(기본 30Hz) 캡슐 10대 위치 + xyz
   /block_state    RELIABLE+TRANSIENT_LOCAL depth 1   변화 시에만
-  /order_event    RELIABLE     depth 50  오더 발령·도착·SIM_DONE
-  /capsule_cmd    RELIABLE     depth 50  캡슐 FSM 전이 + 선점/대피 연출
+  /order_event    RELIABLE     depth 50  오더·선점·대피·SIM_DONE 전 이벤트
+  /control_state  BEST_EFFORT  depth 1   오더 대시보드용 집계 (D)
   /kpi            RELIABLE+TRANSIENT_LOCAL depth 1   완주 시 1회
+
+⚠️ /capsule_pose 는 v3.2 에서 **방향이 반전**되었습니다 (2026-08-21 C 합의).
+   위치의 진실 소스는 관제 코어이고, 코어가 xyz 까지 계산해 발행합니다.
+   씬(B)·브릿지(C)·UI(D) 는 구독만 하며 프림 트랜스폼에 그대로 적용합니다.
+   같은 합의로 **/capsule_cmd 는 폐기**되었습니다 — FSM 상태는 pose 의 state 로,
+   선점·대피 연출은 /order_event 의 event 로 대체됩니다.
 
 왜 커스텀 .msg 가 아니라 String+JSON 인가요?
 --------------------------------------------
@@ -51,10 +57,10 @@ from . import topology as T
 from .bridge import Bridge
 from .fsm import CapsuleState, Order, OrderState
 
-# 엔진 이벤트 → 발행 토픽 분류
+# 엔진이 내는 이벤트는 전부 /order_event 로 나갑니다 (C 매핑표 §2·§3).
+# 아래는 로그 강조와 detail 보강에만 쓰입니다.
 ORDER_EVENTS = {"ORDER_RELEASE", "ORDER_ARRIVE", "CODE_CRIMSON", "SIM_DONE"}
-PREEMPT_EVENTS = {"YIELD": "YIELD", "EVAC_LANE": "EVACUATE", "EVAC_SPUR": "EVACUATE",
-                  "FINISH_ALLOWED": "FINISH_ALLOWED", "RESUME": "RESUME"}
+PREEMPT_EVENTS = {"YIELD", "EVAC_LANE", "EVAC_SPUR", "FINISH_ALLOWED", "RESUME"}
 PREEMPT_REASON = {
     "YIELD": "상위 등급 통과 대기 — 진입 전 양보 (R2)",
     "EVAC_LANE": "Code Crimson 콘보이 회랑 확보를 위해 대피 레인으로 회피 (R3)",
@@ -92,10 +98,10 @@ class ControlCoreNode(Node):
 
         self._load_engine_params()
 
+        self.pub_pose = self.create_publisher(String, "/capsule_pose", QOS_STREAM)
         self.pub_state = self.create_publisher(String, "/control_state", QOS_STREAM)
         self.pub_block = self.create_publisher(String, "/block_state", QOS_LATCHED)
         self.pub_order = self.create_publisher(String, "/order_event", QOS_EVENT)
-        self.pub_cmd = self.create_publisher(String, "/capsule_cmd", QOS_EVENT)
         self.pub_kpi = self.create_publisher(String, "/kpi", QOS_LATCHED)
 
         for name, fn in (("start", self._svc_start), ("pause", self._svc_pause),
@@ -137,7 +143,6 @@ class ControlCoreNode(Node):
         scenario.PARAMS.update({k: v for k, v in eng.items() if k in scenario.PARAMS})
 
     def _reset_pub_state(self) -> None:
-        self._prev_cap: dict[str, str] = {}
         self._kpi_sent = False
         self._cr_seq = 0
 
@@ -154,7 +159,9 @@ class ControlCoreNode(Node):
             events += out["events"]
 
         self._publish_events(events, sim_t)
-        self._publish_capsule_transitions(caps, sim_t)
+        self.pub_pose.publish(String(data=json.dumps(
+            {"sim_t": round(sim_t, 2), "kind": "capsule_pose", "capsules": caps or []},
+            ensure_ascii=False)))
         if blocks is not None:
             self.pub_block.publish(String(data=json.dumps(
                 {"sim_t": round(sim_t, 2), "kind": "block_state", "blocks": blocks},
@@ -177,66 +184,39 @@ class ControlCoreNode(Node):
         return ""
 
     def _publish_events(self, events: list[dict], sim_t: float) -> None:
+        """엔진 이벤트를 전부 /order_event 로 흘려보냅니다.
+
+        v3.2(C 매핑표 §2) 부터 선점·대피 연출도 여기로 나옵니다. 필드는
+        msg 필드명과 1:1 이 되도록 subject/event/detail 을 정본으로 두고,
+        UI 편의를 위한 priority·item·state 는 하위 호환 추가 필드입니다.
+        """
         for e in events:
             ev, subj, detail, t = e["event"], e["subject"], e["detail"], e["sim_t"]
-            if ev in ORDER_EVENTS:
-                o = self.bridge.eng.orders.get(subj)
-                self.pub_order.publish(String(data=json.dumps({
-                    "sim_t": t, "kind": "order_event", "event": ev,
-                    "order_id": subj,
-                    "priority": o.prio if o else None,
-                    "item": ITEM_NAME.get(o.prio, "") if o else "",
-                    "state": o.state.value if o else None,
-                    "code_red": bool(o and o.prio == 0),
-                    "detail": detail,
-                }, ensure_ascii=False)))
-                if ev in ("CODE_CRIMSON", "SIM_DONE"):
-                    self.get_logger().info(f"[{ev}] {subj} {detail}")
-            elif ev in PREEMPT_EVENTS:
-                c = self.bridge.eng.capsules.get(subj)
-                block, siding = self._preempt_blocks(ev, detail, c)
-                self.pub_cmd.publish(String(data=json.dumps({
-                    "sim_t": t, "kind": "preempt", "action": PREEMPT_EVENTS[ev],
-                    "by": self._p0_source(),
-                    "target": c.order.oid if c and c.order else subj,
-                    "capsule": subj, "block": block, "siding": siding,
-                    "reason": PREEMPT_REASON[ev],
-                }, ensure_ascii=False)))
-                if ev != "RESUME":
-                    self.get_logger().warn(
-                        f"[선점] {PREEMPT_EVENTS[ev]} {self._p0_source()} → {subj} ({detail})")
+            payload = {"sim_t": t, "kind": "order_event", "event": ev,
+                       "subject": subj, "detail": detail}
 
-    @staticmethod
-    def _preempt_blocks(ev: str, detail: str, c) -> tuple[str, str]:
-        """엔진 로그의 detail 문자열에서 (블록, 대피레인) 을 뽑습니다."""
-        if ev in ("EVAC_LANE", "EVAC_SPUR") and "->" in detail:
-            a, b = detail.split("->", 1)
-            return a, b
-        if ev == "YIELD":
-            return detail.split(":", 1)[0], ""
-        return (detail or (c.block if c else "") or ""), ""
+            o = self.bridge.eng.orders.get(subj)
+            if o is not None:                       # 오더 대상 이벤트
+                payload.update({"priority": o.prio, "item": ITEM_NAME.get(o.prio, ""),
+                                "state": o.state.value})
+            c = self.bridge.eng.capsules.get(subj)
+            if c is not None:                       # 캡슐 대상 이벤트
+                payload.update({"capsule": subj,
+                                "order_id": c.order.oid if c.order else "",
+                                "priority": c.order.prio if c.order else None})
+            if ev in PREEMPT_EVENTS:
+                payload["reason"] = PREEMPT_REASON[ev]
+                payload["by"] = self._p0_source()
 
-    def _publish_capsule_transitions(self, caps: list[dict] | None, sim_t: float) -> None:
-        """캡슐 FSM 상태가 바뀐 것만 /capsule_cmd 로 발행합니다 (C → Isaac Sim 중계용)."""
-        for c in caps or []:
-            cid, now = c["capsule_id"], c["state"]
-            prev = self._prev_cap.get(cid)
-            self._prev_cap[cid] = now
-            if prev is None or prev == now:      # 초기 상태는 전이가 아님
-                continue
-            # 문자열 필드에는 null 대신 "" 를 보낸다. 수신측이 흔히 쓰는
-            # data.get("node", 기본값) 은 키가 '없을 때만' 기본값을 주므로,
-            # null 을 보내면 None 이 그대로 흘러들어가 파싱이 깨진다.
-            block = c["block_id"]
-            self.pub_cmd.publish(String(data=json.dumps({
-                "sim_t": round(sim_t, 2), "kind": "capsule_state",
-                "capsule": cid, "order": c["order_id"],
-                "from": prev, "to": now, "block": block,
-                "node": T.exit_node(block, c["forward"]) if block else "",
-            }, ensure_ascii=False)))
+            self.pub_order.publish(String(data=json.dumps(payload, ensure_ascii=False)))
+
+            if ev in ("CODE_CRIMSON", "SIM_DONE", "ORDER_RELEASE", "ORDER_ARRIVE"):
+                self.get_logger().info(f"[{ev}] {subj} {detail}")
+            elif ev in PREEMPT_EVENTS and ev != "RESUME":
+                self.get_logger().warn(f"[선점] {ev} {self._p0_source()} → {subj} ({detail})")
 
     def _snapshot(self, caps: list[dict] | None, sim_t: float) -> dict:
-        """D(UI)·B(씬) 가 재조립할 필요 없도록 매 틱 전체 상태를 통째로 보냅니다."""
+        """D(UI) 대시보드용 오더 집계. 늦게 붙어도 이것만 보면 현재 판이 완성됩니다."""
         return {
             "sim_t": round(sim_t, 2), "kind": "control_state",
             "mode": self.bridge.mode, "running": self.bridge.running,
@@ -247,7 +227,8 @@ class ControlCoreNode(Node):
                         "wait": round(o.wait_total, 2), "capsules": o.capsule_ids}
                 for o in self.bridge.eng.orders.values()
             },
-            "capsules": caps or [],
+            # 캡슐 위치는 /capsule_pose 로 나갑니다 (중복 전송 방지).
+            "capsule_count": len(caps or []),
         }
 
     def _kpi(self) -> dict:

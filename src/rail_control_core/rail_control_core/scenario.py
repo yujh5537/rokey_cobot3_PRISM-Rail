@@ -17,9 +17,9 @@ PARAMS = {
 # 오더: (id, prio, route, release_t, capsule_ids)
 # (id, prio, route, release_t, capsules, speed_cap)
 ORDER_DEFS = [
-    ("O-1", 3, "P3_CSR", 6.0, ["C05"], 0.7),   # 오염 기구: 저속 운송 규정 0.7m/s
-    ("O-2", 2, "P2_ICU", 5.0, ["C06"], None),
-    ("O-3", 1, "P1_ICU", 4.0, ["C07"], None),
+    ("O-1", 3, "P3_CSR", 10.0, ["C05"], 0.7),   # 오염 기구: 저속 운송 규정 0.7m/s
+    ("O-2", 2, "P2_ICU", 1.0, ["C06"], None),
+    ("O-3", 1, "P1_ICU", 2.0, ["C07"], None),
     ("O-4", 0, None, 8.0, ["C01", "C02", "C03", "C04"], None),  # Code Crimson 콘보이
 ]
 CONVOY_ROUTES = {"C01": "P0_OR1", "C02": "P0_OR1", "C03": "P0_OR2", "C04": "P0_OR2"}

@@ -3,7 +3,11 @@
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from rail_control_core import topology as T
 from rail_control_core.bridge import Bridge
+# 기준값은 test_regression.py 를 단일 출처로 삼는다. 여기에 숫자를 베껴 두면
+# 토폴로지가 바뀔 때마다 한쪽만 갱신되어 어긋난다 (실제로 v3.2 에서 겪음).
+from test_regression import BASE_B, TOL
 
 TICKS_PER_SEC = 30
 
@@ -36,11 +40,17 @@ def test_capsule_payload_schema():
     caps = out["capsules"]
     assert len(caps) == 10
     for c in caps:
+        # v3.2: 위치 진실 소스가 코어가 되면서 x/y/z 가 추가됨 (C 매핑표 §1)
         assert set(c) == {"capsule_id", "block_id", "pos_m", "forward",
-                          "state", "order_id"}
+                          "state", "order_id", "x", "y", "z"}
+        assert all(isinstance(c[k], (int, float)) for k in ("x", "y", "z"))
     # 콘보이 4대는 대기열 BB-08 에서 시작
     q = [c for c in caps if c["capsule_id"] in ("C01", "C02", "C03", "C04")]
     assert all(c["block_id"] == "BB-08" and c["state"] == "QUEUED" for c in q)
+    # 디포 유휴 캡슐은 레일이 아니라 측면 도크 슬롯 좌표를 받는다
+    docked = [c for c in caps if c["state"] == "DOCKED"]
+    assert docked and all((c["x"], c["y"]) in [tuple(s) for s in T.DOCK_SLOTS]
+                          for c in docked)
 
 
 def test_block_state_published_on_change_only():
@@ -73,7 +83,7 @@ def test_full_run_to_sim_done():
     assert "SIM_DONE" in names
     assert not b.running                       # 완료 후 자동 정지
     done = next(e for e in ev if e["event"] == "SIM_DONE")
-    assert abs(float(done["detail"].split("=")[1]) - 56.53) < 0.2  # 기준값 일치
+    assert abs(float(done["detail"].split("=")[1]) - BASE_B["makespan"]) < TOL
 
 
 def test_mode_switch_resets():

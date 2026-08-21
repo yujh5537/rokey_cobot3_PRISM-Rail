@@ -10,9 +10,9 @@ from rail_control_core.scenario import run
 
 TOL = 0.2  # 허용 오차(초): 30Hz 틱 양자화 감안
 
-# ── 기준값 (2026-08-21 측정, BB-09 cap4 / P3 speed 0.7 / 발령 6,5,4,8s) ──
-BASE_A = {"makespan": 46.90, "O-1": 33.57, "O-2": 18.67, "O-3": 22.87, "O-4": 46.90}
-BASE_B = {"makespan": 56.53, "O-1": 56.53, "O-2": 39.57, "O-3": 19.60, "O-4": 41.47}
+# ── 기준값 (2026-08-21 재측정, 토폴로지 v3.2 씬 실측 길이 / 발령 P2=1,P1=2,P0=8,P3=10 / P3 speed 0.7) ──
+BASE_A = {"makespan": 51.70, "O-1": 41.33, "O-2": 24.73, "O-3": 30.73, "O-4": 51.70}
+BASE_B = {"makespan": 64.23, "O-1": 64.23, "O-2": 54.60, "O-3": 26.37, "O-4": 47.60}
 
 
 def _close(a, b):
@@ -39,11 +39,10 @@ def test_mode_b_baseline():
 
 def test_mode_b_scenes_present():
     """발표 4장면 중 3장면이 시연 시나리오에서 실제 발생하는지.
-    [커버리지 공백] EVAC_LANE(루프 대피 레인 치환)은 현 시나리오에서 미발생 —
-    현재는 EVAC_SPUR(빈 지선 회피)이 먼저 성립. 5일차 엣지케이스에서
-    루프 레인 대피 전용 시나리오를 추가해 검증 예정."""
+    v3.2 실측 길이 반영 후 대피 레인 치환(EVAC_LANE)이 발생 — 발표 장면 ③의 핵심.
+    [커버리지 공백] EVAC_SPUR(지선 회피)는 이제 미발생 — 5일차 엣지케이스에서 별도 검증."""
     r = run("B")
-    assert {"YIELD", "EVAC_SPUR", "FINISH_ALLOWED"} <= set(r["scene_events"])
+    assert {"YIELD", "EVAC_LANE", "FINISH_ALLOWED"} <= set(r["scene_events"])
 
 
 def test_pedd_effect():
