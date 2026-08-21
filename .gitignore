@@ -9,6 +9,16 @@ dist/
 
 # OS
 .DS_Store
+.vscode/
 
 # 환경변수 (각자 로컬에서만 관리)
 .env
+
+# ROS2 빌드 아티팩트
+build/
+install/
+log/
+
+# Isaac Sim 대용량 캐시 및 임시 로그
+*.log
+*.tmp
