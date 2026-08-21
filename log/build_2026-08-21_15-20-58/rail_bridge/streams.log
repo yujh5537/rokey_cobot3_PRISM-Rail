@@ -1,0 +1,28 @@
+[0.475s] Invoking command in '/home/rokey/rokey_cobot3/src/rail_bridge': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rokey/rokey_cobot3/build/rail_bridge/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/rail_bridge build --build-base /home/rokey/rokey_cobot3/build/rail_bridge/build install --record /home/rokey/rokey_cobot3/build/rail_bridge/install.log --install-scripts $base/lib/rail_bridge --single-version-externally-managed install_data
+[0.593s] running egg_info
+[0.600s] writing ../../build/rail_bridge/rail_bridge.egg-info/PKG-INFO
+[0.600s] writing dependency_links to ../../build/rail_bridge/rail_bridge.egg-info/dependency_links.txt
+[0.600s] writing entry points to ../../build/rail_bridge/rail_bridge.egg-info/entry_points.txt
+[0.601s] writing requirements to ../../build/rail_bridge/rail_bridge.egg-info/requires.txt
+[0.601s] writing top-level names to ../../build/rail_bridge/rail_bridge.egg-info/top_level.txt
+[0.616s] reading manifest file '../../build/rail_bridge/rail_bridge.egg-info/SOURCES.txt'
+[0.616s] writing manifest file '../../build/rail_bridge/rail_bridge.egg-info/SOURCES.txt'
+[0.616s] running build
+[0.616s] running build_py
+[0.616s] copying rail_bridge/mock_core_node.py -> /home/rokey/rokey_cobot3/build/rail_bridge/build/lib/rail_bridge
+[0.616s] copying rail_bridge/mock_sim_node.py -> /home/rokey/rokey_cobot3/build/rail_bridge/build/lib/rail_bridge
+[0.616s] running install
+[0.619s] running install_lib
+[0.627s] copying /home/rokey/rokey_cobot3/build/rail_bridge/build/lib/rail_bridge/mock_core_node.py -> /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge
+[0.627s] copying /home/rokey/rokey_cobot3/build/rail_bridge/build/lib/rail_bridge/mock_sim_node.py -> /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge
+[0.627s] byte-compiling /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge/mock_core_node.py to mock_core_node.cpython-312.pyc
+[0.628s] byte-compiling /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge/mock_sim_node.py to mock_sim_node.cpython-312.pyc
+[0.628s] running install_data
+[0.628s] running install_egg_info
+[0.637s] removing '/home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge-0.0.0-py3.12.egg-info' (and everything under it)
+[0.637s] Copying ../../build/rail_bridge/rail_bridge.egg-info to /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge-0.0.0-py3.12.egg-info
+[0.637s] running install_scripts
+[0.690s] Installing mock_core script to /home/rokey/rokey_cobot3/install/rail_bridge/lib/rail_bridge
+[0.690s] Installing mock_sim script to /home/rokey/rokey_cobot3/install/rail_bridge/lib/rail_bridge
+[0.691s] writing list of installed files to '/home/rokey/rokey_cobot3/build/rail_bridge/install.log'
+[0.705s] Invoked command in '/home/rokey/rokey_cobot3/src/rail_bridge' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rokey/rokey_cobot3/build/rail_bridge/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/rail_bridge build --build-base /home/rokey/rokey_cobot3/build/rail_bridge/build install --record /home/rokey/rokey_cobot3/build/rail_bridge/install.log --install-scripts $base/lib/rail_bridge --single-version-externally-managed install_data

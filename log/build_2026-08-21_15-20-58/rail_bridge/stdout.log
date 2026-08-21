@@ -1,0 +1,26 @@
+running egg_info
+writing ../../build/rail_bridge/rail_bridge.egg-info/PKG-INFO
+writing dependency_links to ../../build/rail_bridge/rail_bridge.egg-info/dependency_links.txt
+writing entry points to ../../build/rail_bridge/rail_bridge.egg-info/entry_points.txt
+writing requirements to ../../build/rail_bridge/rail_bridge.egg-info/requires.txt
+writing top-level names to ../../build/rail_bridge/rail_bridge.egg-info/top_level.txt
+reading manifest file '../../build/rail_bridge/rail_bridge.egg-info/SOURCES.txt'
+writing manifest file '../../build/rail_bridge/rail_bridge.egg-info/SOURCES.txt'
+running build
+running build_py
+copying rail_bridge/mock_core_node.py -> /home/rokey/rokey_cobot3/build/rail_bridge/build/lib/rail_bridge
+copying rail_bridge/mock_sim_node.py -> /home/rokey/rokey_cobot3/build/rail_bridge/build/lib/rail_bridge
+running install
+running install_lib
+copying /home/rokey/rokey_cobot3/build/rail_bridge/build/lib/rail_bridge/mock_core_node.py -> /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge
+copying /home/rokey/rokey_cobot3/build/rail_bridge/build/lib/rail_bridge/mock_sim_node.py -> /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge
+byte-compiling /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge/mock_core_node.py to mock_core_node.cpython-312.pyc
+byte-compiling /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge/mock_sim_node.py to mock_sim_node.cpython-312.pyc
+running install_data
+running install_egg_info
+removing '/home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge-0.0.0-py3.12.egg-info' (and everything under it)
+Copying ../../build/rail_bridge/rail_bridge.egg-info to /home/rokey/rokey_cobot3/install/rail_bridge/lib/python3.12/site-packages/rail_bridge-0.0.0-py3.12.egg-info
+running install_scripts
+Installing mock_core script to /home/rokey/rokey_cobot3/install/rail_bridge/lib/rail_bridge
+Installing mock_sim script to /home/rokey/rokey_cobot3/install/rail_bridge/lib/rail_bridge
+writing list of installed files to '/home/rokey/rokey_cobot3/build/rail_bridge/install.log'
