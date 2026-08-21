@@ -8,137 +8,59 @@ from std_msgs.msg import String
 class MockCoreNode(Node):
     def __init__(self):
         super().__init__('mock_core_node')
-        
-        # 1. 발행자 설정
-        self.cmd_pub = self.create_publisher(String, '/capsule_cmd', 10)
-        self.order_pub = self.create_publisher(String, '/order_event', 10)
-        
-        # 2. 구독자 설정 (C/B의 위치 피드백 수신)
-        self.pose_sub = self.create_subscription(String, '/capsule_pose', self.pose_callback, 10)
-        
-        # 3. v3.0 시연 시나리오 이벤트 타임라인 정의
-        self.scenario_steps = [
-            # [T=0s] P3 오염기구 (C-05) 수술장1 출발
-            {
-                "kind": "capsule_state",
-                "capsule": "C-05",
-                "order": "O-4",
-                "to": "MOVING",
-                "node": "ST-OR1",
-                "block": "B2-08"
-            },
-            # [T=5s] P2 항암제 (C-02) 주사조제실 출발
-            {
-                "kind": "capsule_state",
-                "capsule": "C-02",
-                "order": "O-2",
-                "to": "MOVING",
-                "node": "ST-INJ",
-                "block": "SP-INJ"
-            },
-            # [T=12s] P1 응급약품 (C-03) 발생 -> P2에 진입 전 양보(YIELD_WAIT) 선점
-            {
-                "kind": "preempt",
-                "action": "YIELD_WAIT",
-                "by": "O-3",
-                "target": "O-2",
-                "block": "SB-UP",
-                "reason": "상행 쉬프트 진입 전이므로 정차 후 양보"
-            },
-            {
-                "kind": "capsule_state",
-                "capsule": "C-02",
-                "order": "O-2",
-                "to": "YIELD_WAIT",
-                "node": "N-W1",
-                "block": "BB-01"
-            },
-            # [T=20s] P0 Code Crimson 콘보이(C-01~C-04) 발령!
-            # - P1(C-03)은 샤프트 내 완주 허용 (RUN_THROUGH)
-            # - P3(C-05)은 루프 B2 대피 레인으로 대피 (EVACUATE)
-            {
-                "kind": "preempt",
-                "action": "RUN_THROUGH",
-                "by": "CR-1",
-                "target": "O-3",
-                "block": "SB-UP",
-                "reason": "쉬프트 통과 중이므로 완주 허용"
-            },
-            {
-                "kind": "preempt",
-                "action": "EVACUATE",
-                "by": "CR-1",
-                "target": "O-4",
-                "block": "B2-07a",
-                "siding": "B2-07b",
-                "reason": "Code Crimson 회랑 확보를 위해 대피 레인으로 회피"
-            },
-            {
-                "kind": "capsule_state",
-                "capsule": "C-05",
-                "order": "O-4",
-                "to": "EVACUATING",
-                "node": "N-L7",
-                "block": "B2-07b"
-            },
-            {
-                "kind": "capsule_state",
-                "capsule": "C-01",
-                "order": "CR-1",
-                "to": "MOVING",
-                "node": "N-B1",
-                "block": "BB-09"
-            },
-            # [T=40s] Code Crimson 통과 완료 후 대피/대기 캡슐 복귀 (RESUME)
-            {
-                "kind": "preempt",
-                "action": "RESUME",
-                "target": "O-4",
-                "block": "B2-07a",
-                "reason": "Code Crimson 통과 완료 -> 본선 복귀"
-            },
-            {
-                "kind": "capsule_state",
-                "capsule": "C-05",
-                "order": "O-4",
-                "to": "MOVING",
-                "node": "N-L8",
-                "block": "B2-06"
-            }
-        ]
-        
-        self.current_step = 0
-        self.timer = self.create_timer(3.5, self.publish_next_event)
-        self.get_logger().info("🚀 [Mock Core v3.0] 가상 관제 코어가 시작되었습니다. (Code Crimson 시나리오)")
+        self.pub_cmd = self.create_publisher(String, '/capsule_cmd', 10)
+        self.pub_order = self.create_publisher(String, '/order_event', 10)
 
-    def publish_next_event(self):
-        if self.current_step >= len(self.scenario_steps):
-            self.get_logger().info("🏁 모든 시나리오 이벤트 발행 완료. 처음부터 반복합니다.")
-            self.current_step = 0
+        # M2 4대 장면 타임라인 (C01 규격 및 code_crimson 명칭 적용)
+        self.events = [
+            ("capsule_state", "C05", "O-1", "MOVING", "B2-08", "ST-OR1", "", "", ""),
+            ("capsule_state", "C06", "O-2", "MOVING", "SP-INJ", "ST-INJ", "", "", ""),
+            ("preempt", "C06", "O-2", "YIELD_WAIT", "BB-01", "N-W1", "YIELD", "O-3", "상위 등급 통과 대기 — 진입 전 양보 (R2)"),
+            ("preempt", "C07", "O-3", "FINISHING", "SB-UP", "N-W2", "FINISH_ALLOWED", "CR-1", "이미 진입한 블록은 역주행 불가 — 완주 허용 (R4)"),
+            ("preempt", "C05", "O-1", "EVACUATED", "B2-04b", "N-L5", "EVACUATE", "CR-1", "Code Crimson 콘보이 회랑 확보를 위해 대피 레인으로 회피 (R3)"),
+            ("preempt", "C05", "O-1", "MOVING", "B2-04a", "N-L6", "RESUME", "", "선점 파도 통과 완료 — 주행 재개"),
+        ]
+
+        self.idx = 0
+        self.timer = self.create_timer(3.0, self.publish_step)
+        self.get_logger().info("🚀 [Mock Core] 공지 규격(C01 / code_crimson) 적용 모의 관제 노드 시작")
+
+    def publish_step(self):
+        if self.idx >= len(self.events):
+            self.get_logger().info("🏁 M2 전체 시나리오 발행 완료. 반복합니다.")
+            self.idx = 0
             return
 
-        event_data = self.scenario_steps[self.current_step]
-        event_data["t"] = round(time.time(), 2)
+        kind, cid, oid, to_st, blk, node, act, by, reason = self.events[self.idx]
+        payload = {
+            "sim_t": round(time.time(), 2),
+            "kind": kind,
+            "capsule": cid,
+            "capsule_id": cid,
+            "order": oid,
+            "order_id": oid,
+            "to": to_st,
+            "to_state": to_st,
+            "block": blk,
+            "block_id": blk,
+            "node": node,
+            "node_id": node,
+            "action": act,
+            "by": by,
+            "code_crimson": True if "CR-" in by else False,
+            "reason": reason
+        }
 
         msg = String()
-        msg.data = json.dumps(event_data, ensure_ascii=False)
-        self.cmd_pub.publish(msg)
+        msg.data = json.dumps(payload, ensure_ascii=False)
+        self.pub_cmd.publish(msg)
 
-        if event_data.get("kind") == "preempt":
-            self.get_logger().warn(
-                f"⚡ [선점 명령] {event_data.get('action')} | "
-                f"대상: {event_data.get('target')} | 사유: {event_data.get('reason')}"
-            )
+        if kind == "preempt":
+            self.get_logger().warn(f"⚡ [선점 액션] {act} | 캡슐: {cid} | 사유: {reason}")
         else:
-            self.get_logger().info(
-                f"📤 [상태 변경] 캡슐: {event_data.get('capsule')} -> "
-                f"{event_data.get('to')} (노드: {event_data.get('node')})"
-            )
+            self.get_logger().info(f"📤 [상태 전이] 캡슐: {cid} -> {to_st} (블록: {blk})")
 
-        self.current_step += 1
-
-    def pose_callback(self, msg):
-        self.get_logger().info(f"📥 [Mock Core <- Pose 수신] {msg.data}")
+        self.idx += 1
 
 def main(args=None):
     rclpy.init(args=args)
