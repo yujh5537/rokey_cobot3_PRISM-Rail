@@ -12,7 +12,7 @@ ROS 경계 책임(빌드·QoS·네트워크)을 즉시 분리할 수 있습니�
 --------------------------------------
   /capsule_pose   BEST_EFFORT  depth 1   rate_hz(기본 30Hz) 캡슐 10대 위치 + xyz
   /block_state    RELIABLE+TRANSIENT_LOCAL depth 1   변화 시에만
-  /order_event    RELIABLE     depth 50  오더·선점·대피·SIM_DONE 전 이벤트
+  /order_event    RELIABLE     depth 50  오더·선점·대피·DEADLOCK·SIM_DONE 전 이벤트
   /control_state  BEST_EFFORT  depth 1   오더 대시보드용 집계 (D)
   /kpi            RELIABLE+TRANSIENT_LOCAL depth 1   완주 시 1회
 
@@ -59,7 +59,7 @@ from .fsm import CapsuleState, Order, OrderState
 
 # 엔진이 내는 이벤트는 전부 /order_event 로 나갑니다 (C 매핑표 §2·§3).
 # 아래는 로그 강조와 detail 보강에만 쓰입니다.
-ORDER_EVENTS = {"ORDER_RELEASE", "ORDER_ARRIVE", "CODE_CRIMSON", "SIM_DONE"}
+ORDER_EVENTS = {"ORDER_RELEASE", "ORDER_ARRIVE", "CODE_CRIMSON", "SIM_DONE", "DEADLOCK"}
 PREEMPT_EVENTS = {"YIELD", "EVAC_LANE", "EVAC_SPUR", "FINISH_ALLOWED", "RESUME"}
 PREEMPT_REASON = {
     "YIELD": "상위 등급 통과 대기 — 진입 전 양보 (R2)",
@@ -210,7 +210,10 @@ class ControlCoreNode(Node):
 
             self.pub_order.publish(String(data=json.dumps(payload, ensure_ascii=False)))
 
-            if ev in ("CODE_CRIMSON", "SIM_DONE", "ORDER_RELEASE", "ORDER_ARRIVE"):
+            if ev == "DEADLOCK":
+                # 관제가 스스로 교착을 감지한 상황 — UI 는 빨간 배너로 띄웁니다.
+                self.get_logger().error(f"🚨 [교착 감지] {detail}")
+            elif ev in ("CODE_CRIMSON", "SIM_DONE", "ORDER_RELEASE", "ORDER_ARRIVE"):
                 self.get_logger().info(f"[{ev}] {subj} {detail}")
             elif ev in PREEMPT_EVENTS and ev != "RESUME":
                 self.get_logger().warn(f"[선점] {ev} {self._p0_source()} → {subj} ({detail})")

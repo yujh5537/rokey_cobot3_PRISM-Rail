@@ -108,6 +108,11 @@ ROUTES = {
                ("B2-01", True), ("B2-02", True), ("SP-ICU", True)],
     "P3_CSR": [("B2-08", False), ("B2-07a", False), ("B2-06", False), ("B2-05", False),
                ("B2-04a", False), ("B2-03", False), ("B2-02", False), ("SP-CSR", True)],
+    # 엣지케이스 전용: 2F ICU -> B1F 약제부 역방향 배송. B1F 본선을 동진하므로
+    # 서진하는 P0 콘보이와 정면으로 만나 지선 대피(EVAC_SPUR)가 강제된다.
+    # 시연 시나리오에는 쓰이지 않는다 (test/test_edge_cases.py 전용).
+    "X_ICU_PHM": [("SP-ICU", False), ("B2-02", False), ("B2-01", False), ("SB-DN", True),
+                  ("BB-01", True), ("BB-02", True), ("SP-PHM", True)],
 }
 
 

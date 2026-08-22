@@ -20,6 +20,7 @@ engine:
   pitch: 0.9             # m — 캡슐 점유 피치 (길이 0.6 + 안전간격 0.3) [가정]
   yield_window_sec: 15.0 # P0 선점 잠금 파도(bow-wave) 폭
   unload_sec: 2.0        # 목적지 하역 소요
+  stall_timeout_sec: 20.0  # 전역 무진행 이 시간 초과 시 DEADLOCK 이벤트 1회 발행
   priority_due_sec:      # EDD 마감 = 발령시각 + 이 값
     0: 60                # P0 (Code Crimson)
     1: 180               # P1

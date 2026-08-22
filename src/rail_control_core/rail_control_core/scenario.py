@@ -11,6 +11,7 @@ PARAMS = {
     "pitch": 0.9,
     "yield_window_sec": 15.0,
     "unload_sec": 2.0,
+    "stall_timeout_sec": 20.0,
     "priority_due_sec": {0: 60, 1: 180, 2: 600, 3: 1800},
 }
 
@@ -68,6 +69,46 @@ def run(mode: str, verbose: bool = False) -> dict:
     result["scene_events"] = sorted({ev for _, ev, _, _ in eng.events}
                                     & {"YIELD", "EVAC_LANE", "EVAC_SPUR", "FINISH_ALLOWED"})
     return result
+
+
+def build_custom(mode: str, order_defs, standby: dict[str, str],
+                 convoy: dict[str, str] | None = None,
+                 idle: tuple = ("C08", "C09", "C10")):
+    """엣지케이스용 빌더 — 발령표·선배치·콘보이 구성을 자유 지정.
+    order_defs: [(oid, prio, route_or_None, release_t, [cids], speed)]
+    standby: cid -> route명 (출발 스테이션 선배치)
+    convoy: cid -> route명 (BB-08 대기열, 선두부터)"""
+    from .engine import Engine
+    from .fsm import Order, Capsule, CapsuleState
+    from . import topology as T
+    eng = Engine(PARAMS, mode)
+    for oid, prio, route, rel, cids, spd in order_defs:
+        due = rel + PARAMS["priority_due_sec"][prio]
+        eng.orders[oid] = Order(oid, prio, route or "convoy", rel, due, cids, speed=spd)
+    for cid, rname in standby.items():
+        oid = next(o for o, _, _, _, cs, _ in order_defs if cid in cs)
+        c = Capsule(cid, eng.orders[oid], list(T.ROUTES[rname]),
+                    idx=0, state=CapsuleState.STANDBY)
+        bid, fwd = c.route[0]
+        c.block, c.fwd, c.pos = bid, fwd, 0.0
+        eng.capsules[cid] = c
+        eng.occ[bid].append(c)
+        eng._corridor_update_on_enter(bid, fwd)
+    if convoy:
+        L = T.BLOCKS["BB-08"][2]
+        for i, (cid, rname) in enumerate(convoy.items()):
+            oid = next(o for o, _, _, _, cs, _ in order_defs if cid in cs)
+            c = Capsule(cid, eng.orders[oid], list(T.ROUTES[rname]),
+                        idx=-1, state=CapsuleState.QUEUED)
+            c.block, c.fwd, c.pos = "BB-08", True, L - i * PARAMS["pitch"]
+            eng.capsules[cid] = c
+            eng.occ["BB-08"].append(c)
+    for cid in idle:
+        c = Capsule(cid, None, [], state=CapsuleState.DOCKED)
+        c.block = "BB-07"
+        eng.capsules[cid] = c
+        eng.occ["BB-07"].append(c)
+    return eng
 
 
 def main() -> None:

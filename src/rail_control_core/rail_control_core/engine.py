@@ -24,6 +24,8 @@ class Engine:
         self.corridor_dir: dict[str, int] = {c: 0 for c in T.CORRIDORS}
         self.events: list[tuple[float, str, str, str]] = []
         self._finish_logged: set[str] = set()
+        self._stall_since: float | None = None
+        self._deadlock_logged = False
 
     # ---------- 조회 ----------
     def speed(self, block_id: str, c=None) -> float:
@@ -203,7 +205,30 @@ class Engine:
         return False
 
     # ---------- 전이 실행 ----------
+    def _note_progress(self):
+        self._stall_since = None
+
+    def _check_stall(self):
+        """전역 무진행 감시: 활성 오더가 있는데 아무 캡슐도 움직이지 못하면
+        stall_timeout 후 DEADLOCK 이벤트 1회 발행 (운영 관제 알림용)."""
+        if self._deadlock_logged:
+            return
+        active = any(o.state == OrderState.EN_ROUTE for o in self.orders.values())
+        if not active:
+            self._stall_since = None
+            return
+        if self._stall_since is None:
+            self._stall_since = self.t
+            return
+        if self.t - self._stall_since > self.p.get("stall_timeout_sec", 20.0):
+            stuck = [f"{c.cid}@{c.block}" for c in self.capsules.values()
+                     if c.state in (CapsuleState.YIELD_WAIT, CapsuleState.EVACUATED)]
+            self.log("DEADLOCK", "sim", "무진행 " +
+                     f"{self.t - self._stall_since:.0f}s, 대기: {','.join(stuck)}")
+            self._deadlock_logged = True
+
     def _do_enter(self, c: Capsule, block_id: str, fwd: bool):
+        self._note_progress()
         if c.block is not None and c in self.occ[c.block]:
             self.occ[c.block].remove(c)
         c.block, c.fwd, c.pos = block_id, fwd, 0.0
@@ -280,7 +305,10 @@ class Engine:
             i = occ.index(c)
             if i > 0:
                 limit = min(limit, occ[i - 1].pos - self.p["pitch"])
-            c.pos = min(c.pos + self.speed(c.block, c) * DT, max(limit, c.pos))
+            new_pos = min(c.pos + self.speed(c.block, c) * DT, max(limit, c.pos))
+            if new_pos > c.pos + 1e-9:
+                self._note_progress()
+            c.pos = new_pos
             if self.mode == "B" and c.block in locked and c.order and c.order.prio > 0 \
                and c.cid not in self._finish_logged and c.pos < length:
                 self._finish_logged.add(c.cid)
@@ -349,6 +377,8 @@ class Engine:
                     self.log("YIELD", c.cid, f"{nbid}:{reason}")
                 if c.order:
                     c.order.wait_total += DT
+
+        self._check_stall()
 
     def _arrive(self, c: Capsule):
         c.state = CapsuleState.UNLOADING
