@@ -8,7 +8,8 @@
       "/capsule_pose 방향 반전 — 이제 코어가 발행하고 씬(B)·브릿지(C)·UI(D)가 구독한다. 위치의 진실 소스는 관제 코어.",
       "코어가 씬 월드 좌표 x/y/z 까지 계산해 실어 보낸다 (rail_control_core/geometry.py 단일 지점).",
       "/capsule_cmd 폐기 — FSM 상태는 pose 의 state 로, 선점·대피 연출은 /order_event 의 event 로 대체.",
-      "블록 길이가 씬 실측으로 확정(24개 변경)되어 회귀 기준값 재측정 — 모드 A 51.70 / 모드 B 64.23, P0 도착 47.60."
+      "블록 길이가 씬 실측으로 확정(24개 변경)되어 회귀 기준값 재측정 — 모드 A 51.70 / 모드 B 64.23, P0 도착 47.60.",
+      "어휘 확장: /order_event 에 DEADLOCK 추가 (msg 스키마 변경 없음). 관제가 20초 무진행을 감지하면 대치 당사자까지 담아 1회 발행한다. UI 는 빨간 배너 권장."
     ],
     "compat_rule": "필드 추가는 하위 호환으로 허용(수신측은 모르는 키 무시). 필드 삭제·의미 변경은 버전 상향 + 팀 합의 필요.",
     "qos_warning": "BEST_EFFORT 토픽을 RELIABLE 구독자로 받으면 매칭 실패로 아무것도 오지 않는다. 안 보이면 구독 QoS 부터 확인할 것.",
@@ -68,6 +69,7 @@
         "ORDER_ARRIVE",
         "CODE_CRIMSON",
         "SIM_DONE",
+        "DEADLOCK",
         "YIELD",
         "EVAC_LANE",
         "EVAC_SPUR",
@@ -77,7 +79,7 @@
       ],
       "fields": {
         "subject": "오더 id(오더 이벤트) 또는 캡슐 id(캡슐 이벤트)",
-        "detail": "이벤트별 맥락. EVAC_* 는 \"B2-05->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=64.23\"",
+        "detail": "이벤트별 맥락. EVAC_* 는 \"B2-05->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=64.23\", DEADLOCK 은 \"무진행 20s, 대기: C05@B2-04a,C01@B2-03\"",
         "reason": "선점 계열에만. 사람이 읽는 설명 (R2~R4 근거)",
         "by": "선점 계열에만. 선점을 유발한 P0 오더 id"
       },
@@ -103,6 +105,13 @@
           "priority": 3,
           "by": "O-4",
           "reason": "Code Crimson 콘보이 회랑 확보를 위해 대피 레인으로 회피 (R3)"
+        },
+        "deadlock": {
+          "sim_t": 52.37,
+          "kind": "order_event",
+          "event": "DEADLOCK",
+          "subject": "sim",
+          "detail": "무진행 20s, 대기: C05@B2-04a,C01@B2-03,C02@B2-02,C03@B2-01,C04@SB-UP"
         }
       }
     },

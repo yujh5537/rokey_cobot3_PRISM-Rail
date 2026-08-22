@@ -92,8 +92,27 @@ def test_mode_switch_resets():
     assert ok and b.mode == "A" and b.eng.t == 0.0 and not b.running
 
 
+def test_payload_rounding_invariant():
+    """발행 페이로드의 모든 좌표·수치가 소수 4자리 이내여야 한다.
+
+    부동소수 잔재(예: z=4.366666666666666, y=3.9999999999999996)가 그대로
+    토픽에 실려 나간 사고가 두 번 있었다. 발행원에서 막는다.
+    """
+    b = Bridge("B"); b.command("start")
+    checked = 0
+    for _ in range(400):
+        out = b.step()
+        for c in out["capsules"]:
+            for k in ("x", "y", "z", "pos_m"):
+                v = c[k]
+                assert round(v, 4) == v, f"{c['capsule_id']}.{k} = {v!r} (소수 4자리 초과)"
+                checked += 1
+    assert checked > 0
+
+
 if __name__ == "__main__":
     for fn in [test_start_pause_reset_status, test_capsule_payload_schema,
+               test_payload_rounding_invariant,
                test_block_state_published_on_change_only,
                test_code_crimson_immediate_release,
                test_full_run_to_sim_done, test_mode_switch_resets]:
