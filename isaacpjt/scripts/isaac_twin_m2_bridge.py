@@ -1,7 +1,8 @@
 """
 isaac_twin_m2_bridge.py — M2 고정 경로 (/World/Capsules/Capsule_01~10) 완주 브릿지
-- 자식 객체(Body, Model)의 로컬 오프셋을 (0, 0, 0)으로 자동 정렬하여 부모 캡슐과 동일 좌표로 주행
-- 관제 코어 /capsule_pose (30Hz) 수신 즉시 위치/회전 반영
+- 6번, 7번 포함 "모든 캡슐" 샤프트 구간(SB-UP, SB-DN) 진입 시 (0, 0, 90)도 완벽 고정
+- C06, C07 일반 레일 주행 시 90도 전면 오차 보정 추종
+- 자식 객체(Body, Model)의 로컬 위치를 (0, 0, 0)으로 정렬
 """
 
 import json
@@ -48,20 +49,29 @@ INITIAL_POSITIONS = {
 
 # 2. 캡슐 제어 객체
 class CapsuleActor:
-    def __init__(self, stage, prim_path, init_pos):
+    def __init__(self, stage, prim_path, cid, init_pos):
         self.stage = stage
         self.prim_path = prim_path
+        self.cid = cid
         self.prim = stage.GetPrimAtPath(prim_path)
+        
+        # C06, C07만 일반 레일 주행 시 90도 전면 보정
+        if self.cid in ("C06", "C07"):
+            self.heading_offset = 90.0
+        else:
+            self.heading_offset = 0.0
         
         if not self.prim.IsValid():
             print(f"⚠️ [경고] {prim_path} 를 찾지 못했습니다. Stage 패널을 확인하세요.")
             return
 
-        # 📌 [핵심 수정] 하위 자식 오브젝트(Body, Model)의 로컬 Translate 좌표를 (0, 0, 0)으로 강제 정렬
+        # 자식 객체(Body, Model) 위치 (0,0,0) 및 회전 (0,0,0) 초기화
         for child_name in ["Body", "Model"]:
             child_prim = stage.GetPrimAtPath(f"{prim_path}/{child_name}")
             if child_prim.IsValid():
                 child_xform = UsdGeom.Xformable(child_prim)
+                
+                # Translate 정렬 (0, 0, 0)
                 has_translate = False
                 for op in child_xform.GetOrderedXformOps():
                     if op.GetOpType() == UsdGeom.XformOp.TypeTranslate:
@@ -69,6 +79,17 @@ class CapsuleActor:
                         has_translate = True
                 if not has_translate:
                     child_xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 0.0))
+                
+                # 회전 (0, 0, 0) 초기화
+                for op in child_xform.GetOrderedXformOps():
+                    if op.GetOpType() == UsdGeom.XformOp.TypeRotateX:
+                        op.Set(0.0)
+                    elif op.GetOpType() == UsdGeom.XformOp.TypeRotateY:
+                        op.Set(0.0)
+                    elif op.GetOpType() == UsdGeom.XformOp.TypeRotateZ:
+                        op.Set(0.0)
+                    elif op.GetOpType() == UsdGeom.XformOp.TypeRotateXYZ:
+                        op.Set(Gf.Vec3d(0.0, 0.0, 0.0))
 
         self.xform = UsdGeom.Xformable(self.prim)
         self.translate_op = None
@@ -83,25 +104,29 @@ class CapsuleActor:
         if not self.translate_op:
             self.translate_op = self.xform.AddTranslateOp()
         if not self.rotate_op:
-            self.rotate_op = self.xform.AddRotateZOp()
+            self.rotate_op = self.xform.AddRotateXYZOp()
             
-        # 초기 하드코딩 좌표 반영
         self.init_translate = Gf.Vec3d(*init_pos)
-        self.init_rotate = self.rotate_op.Get()
         self.init_visibility = UsdGeom.Imageable(self.prim).ComputeVisibility()
             
         self.prev_pos = None
         self.yaw = 0.0
         
-        # 스크립트 실행(Play) 시 즉시 초기 위치로 이동
         self.reset()
 
     def reset(self):
         if not self.prim.IsValid(): return
         if self.translate_op and self.init_translate is not None:
             self.translate_op.Set(self.init_translate)
-        if self.rotate_op and self.init_rotate is not None:
-            self.rotate_op.Set(self.init_rotate)
+        
+        # 기본 대기 상태 회전 설정
+        if self.rotate_op:
+            op_type = self.rotate_op.GetOpType()
+            if op_type == UsdGeom.XformOp.TypeRotateXYZ:
+                self.rotate_op.Set(Gf.Vec3d(0.0, 0.0, self.heading_offset))
+            else:
+                try: self.rotate_op.Set(self.heading_offset)
+                except: self.rotate_op.Set(Gf.Vec3d(0.0, 0.0, self.heading_offset))
         
         if self.init_visibility == "invisible":
             UsdGeom.Imageable(self.prim).MakeInvisible()
@@ -109,7 +134,7 @@ class CapsuleActor:
             UsdGeom.Imageable(self.prim).MakeVisible()
             
         self.prev_pos = None
-        self.yaw = 0.0
+        self.yaw = self.heading_offset
 
     def set_visible(self, visible):
         if not self.prim.IsValid(): return
@@ -119,34 +144,38 @@ class CapsuleActor:
         if not self.prim.IsValid(): return
 
         curr = (x, y, z)
+        b_id = str(block_id).upper().replace("_", "-")
 
-        # 샤프트인 경우 회전 없음
-        if block_id in ("SB-UP", "SB-DN"):
-            self.yaw = 0.0
-        elif self.prev_pos is not None:
-            dx = curr[0] - self.prev_pos[0]
-            dy = curr[1] - self.prev_pos[1]
-            dist = math.hypot(dx, dy)
-            if dist > 0.001:
-                angle = math.degrees(math.atan2(dy, dx))
-                if not fwd:
-                    angle += 180.0
-                self.yaw = angle
+        # 📌 1) 샤프트 구간 (SB-UP / SB-DN): 6번, 7번 포함 '모든 캡슐' 무조건 (0, 0, 90)도 고정!
+        if "SB" in b_id or "SHAFT" in b_id:
+            rot_x = 0.0
+            rot_y = 0.0
+            rot_z = 90.0
+        # 📌 2) 일반 주행 구간: 방향 추종 (C06, C07은 전면 오프셋 90도 합산)
+        else:
+            rot_x = 0.0
+            rot_y = 0.0
+            if self.prev_pos is not None:
+                dx = curr[0] - self.prev_pos[0]
+                dy = curr[1] - self.prev_pos[1]
+                dist = math.hypot(dx, dy)
+                if dist > 0.001:
+                    calc_yaw = math.degrees(math.atan2(dy, dx)) + self.heading_offset
+                    self.yaw = calc_yaw
+            rot_z = self.yaw
 
+        # 위치 갱신
         self.translate_op.Set(Gf.Vec3d(curr[0], curr[1], curr[2] + Z_OFFSET))
         
-        # 안전한 회전 값 적용 (float vs Vec3d 충돌 방지)
+        # 회전 갱신
         op_type = self.rotate_op.GetOpType()
         if op_type == UsdGeom.XformOp.TypeRotateXYZ:
-            curr_rot = self.rotate_op.Get()
-            if curr_rot is None:
-                curr_rot = (0.0, 0.0, 0.0)
-            self.rotate_op.Set(Gf.Vec3d(curr_rot[0], curr_rot[1], self.yaw))
+            self.rotate_op.Set(Gf.Vec3d(rot_x, rot_y, rot_z))
         else:
             try:
-                self.rotate_op.Set(self.yaw)
+                self.rotate_op.Set(rot_z)
             except Exception:
-                self.rotate_op.Set(Gf.Vec3d(0.0, 0.0, self.yaw))
+                self.rotate_op.Set(Gf.Vec3d(rot_x, rot_y, rot_z))
                 
         self.prev_pos = curr
 
@@ -154,17 +183,16 @@ class CapsuleActor:
 class FixedBridgeNode(Node):
     def __init__(self, stage):
         super().__init__("fixed_bridge_node")
-        # 📌 /World/Capsules/Capsule_01 ~ Capsule_10 에 직접 매핑
         self.actors = {}
         for i in range(1, 11):
             cid = f"C{i:02d}"
             prim_path = f"/World/Capsules/Capsule_{i:02d}"
             init_pos = INITIAL_POSITIONS[cid]
-            self.actors[cid] = CapsuleActor(stage, prim_path, init_pos)
+            self.actors[cid] = CapsuleActor(stage, prim_path, cid, init_pos)
             
         qos = QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT)
         self.create_subscription(String, "/capsule_pose", self.on_state, qos)
-        print("✅ [M2 고정 브릿지] Capsule_01~10 (Body/Model 로컬 위치 정렬 완료) 바인딩 완료. 수신 대기 중!")
+        print("✅ [M2 고정 브릿지] 6·7번 포함 전 캡슐 샤프트 (0,0,90) 적용 완료!")
         
         self.last_msg_time = self.get_clock().now()
         self.is_reset = False
