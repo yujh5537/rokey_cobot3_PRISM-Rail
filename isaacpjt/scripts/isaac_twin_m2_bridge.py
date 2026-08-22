@@ -55,12 +55,6 @@ class CapsuleActor:
         self.cid = cid
         self.prim = stage.GetPrimAtPath(prim_path)
         
-        # C06, C07만 일반 레일 주행 시 90도 전면 보정
-        if self.cid in ("C06", "C07"):
-            self.heading_offset = 90.0
-        else:
-            self.heading_offset = 0.0
-        
         if not self.prim.IsValid():
             print(f"⚠️ [경고] {prim_path} 를 찾지 못했습니다. Stage 패널을 확인하세요.")
             return
@@ -123,10 +117,10 @@ class CapsuleActor:
         if self.rotate_op:
             op_type = self.rotate_op.GetOpType()
             if op_type == UsdGeom.XformOp.TypeRotateXYZ:
-                self.rotate_op.Set(Gf.Vec3d(0.0, 0.0, self.heading_offset))
+                self.rotate_op.Set(Gf.Vec3d(0.0, 0.0, 0.0))
             else:
-                try: self.rotate_op.Set(self.heading_offset)
-                except: self.rotate_op.Set(Gf.Vec3d(0.0, 0.0, self.heading_offset))
+                try: self.rotate_op.Set(0.0)
+                except: self.rotate_op.Set(Gf.Vec3d(0.0, 0.0, 0.0))
         
         if self.init_visibility == "invisible":
             UsdGeom.Imageable(self.prim).MakeInvisible()
@@ -134,7 +128,7 @@ class CapsuleActor:
             UsdGeom.Imageable(self.prim).MakeVisible()
             
         self.prev_pos = None
-        self.yaw = self.heading_offset
+        self.yaw = 0.0
 
     def set_visible(self, visible):
         if not self.prim.IsValid(): return
@@ -151,7 +145,7 @@ class CapsuleActor:
             rot_x = 0.0
             rot_y = 0.0
             rot_z = 90.0
-        # 📌 2) 일반 주행 구간: 방향 추종 (C06, C07은 전면 오프셋 90도 합산)
+        # 📌 2) 일반 주행 구간: 방향 추종
         else:
             rot_x = 0.0
             rot_y = 0.0
@@ -160,7 +154,9 @@ class CapsuleActor:
                 dy = curr[1] - self.prev_pos[1]
                 dist = math.hypot(dx, dy)
                 if dist > 0.001:
-                    calc_yaw = math.degrees(math.atan2(dy, dx)) + self.heading_offset
+                    calc_yaw = math.degrees(math.atan2(dy, dx))
+                    if not fwd:
+                        calc_yaw += 180.0
                     self.yaw = calc_yaw
             rot_z = self.yaw
 
