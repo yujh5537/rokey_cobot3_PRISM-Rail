@@ -43,6 +43,11 @@
 | (없음) | `sim_t`, `stamp` | 시뮬 시각 / ROS 시각 |
 
 브릿지 처리: `for c in msg.capsules:` → `/World/Capsules/{c.capsule_id}` 트랜스폼 = (c.x, c.y, c.z).
+
+> **[확인 대기]** 실제 브릿지(`isaacpjt/scripts/isaac_twin_m2_bridge.py`)는 프림을
+> `/World/Capsules/Capsule_01` 형식으로 씁니다. 브릿지가 내부에서 `capsule_id` → 프림을
+> 매핑하므로 동작에는 문제가 없습니다. 명명 규약을 코드(`Capsule_01`) 기준으로 확정할지
+> 석형님 회신 후 이 문서를 실물에 맞춰 고칩니다.
 `state == "REMOVED"` 면 프림 숨김(visibility off) 권장. 경로 규약 `/World/Capsules/C01~C10` 유지.
 
 ## 2. /capsule_cmd — **폐기**
@@ -66,10 +71,28 @@
 | `code_red: true` | (폐기) | 명칭은 **Code Crimson** — 발동 이벤트는 `event: "CODE_CRIMSON"` |
 | `t` | `sim_t` | |
 
-## 4. 서비스 (신규 — mock_core 에 추가 권장)
+## 4. 서비스 — ⚠️ 확정 변경: `std_srvs/Trigger` 8종 (2026-08-22)
 
-- `/code_crimson` `rail_interfaces/srv/CodeCrimson` — `{note}` → `{accepted, order_id, message}`
-- `/sim_control` `rail_interfaces/srv/SimCommand` — `{command: start|pause|reset|mode_a|mode_b|status}`
+`rail_interfaces/srv/CodeCrimson`, `rail_interfaces/srv/SimCommand` 는 **deprecated** 입니다.
+만들지 마세요. 서비스는 관제 코어 노드(`control_core_node.py`)가 제공하며,
+커스텀 srv 없이 ack 를 받기 위해 **명령당 하나씩** `std_srvs/srv/Trigger` 로 나눴습니다.
+
+| 서비스 | 역할 |
+|---|---|
+| `/sim_start` | 시나리오 진행 시작 |
+| `/sim_pause` | 일시정지 (시뮬 시간 정지) |
+| `/sim_reset` | 현재 모드로 초기화 (t=0) |
+| `/sim_status` | t·mode·running·오더 상태를 message 로 반환 |
+| `/sim_mode_a` | 모드 A(FCFS)로 초기화 — 비교군 |
+| `/sim_mode_b` | 모드 B(PEDD 선점)로 초기화 |
+| `/code_crimson` | 예약 P0 발령을 지금으로 앞당김 (이미 발령됐으면 사유와 함께 거부) |
+| `/code_red` | 디포 유휴 캡슐로 추가 P0 생성 (예약 P0 이후에도 사용 가능) |
+
+```bash
+ros2 service call /sim_start std_srvs/srv/Trigger
+```
+
+기존 `SimCommand{command: ...}` 의 6개 명령은 `/sim_*` 6종에 1:1 대응합니다.
 
 ## 5. mock 노드 수정 요약
 
