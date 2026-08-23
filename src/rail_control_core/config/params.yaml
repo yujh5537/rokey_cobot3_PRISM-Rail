@@ -15,17 +15,24 @@ control_core_node:
 # ---------- 엔진 파라미터 (scenario.PARAMS 를 덮어씀) ----------
 # 키 이름은 engine.py 가 읽는 이름과 정확히 일치해야 합니다.
 engine:
-  speed_default: 1.5     # m/s — 일반 구간
-  speed_shaft: 1.0       # m/s — 수직 쉬프트(SB-*)
-  pitch: 0.9             # m — 캡슐 점유 피치 (길이 0.6 + 안전간격 0.3) [가정]
+  # A1 속도 체계 (2026-08-23 확정)
+  v_nominal: 1.0         # m/s — 수평 평시 순항
+  v_max: 2.0             # m/s — 회복 상한 (P0·P1 은 상시 이 값)
+  speed_shaft: 0.5       # m/s — 수직 쉬프트(SB-*)
+  speed_curve: 0.5       # m/s — 곡선 존·분기 연결 블록 통과 상한
+  accel: 0.8             # m/s^2 — 가속 제한 (용혈 방지). 감속은 즉시(보수적 근사)
+  # RTA 슬랙 회복 (R11) / 자동 승격 (R12)
+  rta_slack_threshold: 10.0  # 잔여 슬랙이 이 값 미만이면 회복 지령 산출
+  rta_margin: 0.4            # 필요속도에 곱하는 여유율 (1+margin)
+  pitch: 0.9             # m — 캡슐 점유 피치 (길이 0.6 + 안전간격 0.3)
   yield_window_sec: 15.0 # P0 선점 잠금 파도(bow-wave) 폭
   unload_sec: 2.0        # 목적지 하역 소요
   stall_timeout_sec: 20.0  # 전역 무진행 이 시간 초과 시 DEADLOCK 이벤트 1회 발행
-  priority_due_sec:      # EDD 마감 = 발령시각 + 이 값
-    0: 60                # P0 (Code Crimson)
-    1: 180               # P1
-    2: 600               # P2
-    3: 1800              # P3
+  priority_due_sec:      # EDD 마감 = 발령시각 + 이 값 (시연 스케일, A2 확정)
+    0: 30                # P0 (Code Crimson)
+    1: 40                # P1
+    2: 85                # P2 — RTA 회복이 실제로 작동하는 값
+    3: 130               # P3
 
 # ---------- 참고: 명세서 §7 의 나머지 항목 (현재 코드가 읽지 않는 문서값) ----------
 # 토폴로지 상수(블록 길이·용량)는 rail_control_core/topology.py 에 하드코딩되어
@@ -42,6 +49,6 @@ reference:
 
 # ---------- 회귀 기준값 (명세서 §6-2, 2026-08-21 측정) ----------
 baseline:
-  mode_a_makespan_s: 46.90
-  mode_b_p0_arrive_s: 41.47
+  mode_a_makespan_s: 73.70
+  mode_b_p0_arrive_s: 71.07
   tolerance_s: 0.2

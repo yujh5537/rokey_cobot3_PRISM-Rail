@@ -1,6 +1,6 @@
 {
   "_about": {
-    "version": "v3.2-FROZEN-2026-08-21",
+    "version": "v3.3-FROZEN-2026-08-23",
     "owner": "A(관제 코어)",
     "encoding": "모든 토픽 std_msgs/msg/String, data 는 UTF-8 JSON 문자열",
     "why_not_custom_msg": "커스텀 msg 는 4대 PC 전원 재빌드가 필요하고 rosbridge 로 D 에게 넘길 때 변환이 든다. 06c0783 에서 팀 합의로 rail_msgs 를 삭제하고 이 스키마로 동결했다. JSON 키 이름은 docs/C연동_매핑표.md 의 msg 필드명과 1:1 이다.",
@@ -14,7 +14,14 @@
     "compat_rule": "필드 추가는 하위 호환으로 허용(수신측은 모르는 키 무시). 필드 삭제·의미 변경은 버전 상향 + 팀 합의 필요.",
     "qos_warning": "BEST_EFFORT 토픽을 RELIABLE 구독자로 받으면 매칭 실패로 아무것도 오지 않는다. 안 보이면 구독 QoS 부터 확인할 것.",
     "sim_t": "모든 페이로드의 sim_t 는 시뮬레이션 경과 시간(초). 벽시계가 아니다.",
-    "ids": "캡슐 C01~C10 (하이픈 없음), 오더 O-1~O-4 / 수동 발령 CR-n"
+    "ids": "캡슐 C01~C10 (하이픈 없음), 오더 O-1~O-4 / 수동 발령 CR-n",
+    "v3_3_changes": [
+      "어휘 확장: RTA_ENGAGED(슬랙 회복 지령 개시, R11), PRIORITY_PROMOTED(P2→P1 승격, R12). msg 스키마 변경 없음.",
+      "A1 속도 체계 반영 — 수평 평시 1.0 / 회복상한 2.0, 샤프트 0.5, 곡선·분기 0.5. 캡슐 속도는 가속 0.8m/s^2 로 제한(용혈 방지).",
+      "2차 좌표 반영(노드 5개 이동, 블록 7개 길이 변경) + B1 루프 접점 N-L1=-1.5 / N-L2=2.5 확정, ST-OR2=(4.5,-0.8,13.0) 실측 확정.",
+      "회귀 기준값 재측정: 모드 A 73.70 / 모드 B 94.47, P0 도착 73.70→71.07(-3.6%). 이전 51.70/47.60·46.90/41.47 은 전부 폐기.",
+      "장면 ③ 은 EVAC_LANE 치환형이 새 물리에서 모드 A 무교착과 양립하지 않아 EVAC_SPUR(같은 B2-04b 레인 후진 진입)로 확정. 화면·서사는 동일."
+    ]
   },
   "topics": {
     "/capsule_pose": {
@@ -70,6 +77,8 @@
         "CODE_CRIMSON",
         "SIM_DONE",
         "DEADLOCK",
+        "RTA_ENGAGED",
+        "PRIORITY_PROMOTED",
         "YIELD",
         "EVAC_LANE",
         "EVAC_SPUR",
@@ -79,7 +88,7 @@
       ],
       "fields": {
         "subject": "오더 id(오더 이벤트) 또는 캡슐 id(캡슐 이벤트)",
-        "detail": "이벤트별 맥락. EVAC_* 는 \"B2-05->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=64.23\", DEADLOCK 은 \"무진행 20s, 대기: C05@B2-04a,C01@B2-03\"",
+        "detail": "이벤트별 맥락. EVAC_* 는 \"B2-04a->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=94.47\", DEADLOCK 은 \"무진행 20s, 대기: C05@...\", RTA_ENGAGED 는 \"slack=3.8s v_cmd=1.05\"",
         "reason": "선점 계열에만. 사람이 읽는 설명 (R2~R4 근거)",
         "by": "선점 계열에만. 선점을 유발한 P0 오더 id"
       },
@@ -112,6 +121,15 @@
           "event": "DEADLOCK",
           "subject": "sim",
           "detail": "무진행 20s, 대기: C05@B2-04a,C01@B2-03,C02@B2-02,C03@B2-01,C04@SB-UP"
+        },
+        "rta": {
+          "sim_t": 52.63,
+          "kind": "order_event",
+          "event": "RTA_ENGAGED",
+          "subject": "O-2",
+          "detail": "slack=3.8s v_cmd=1.05",
+          "priority": 2,
+          "state": "EN_ROUTE"
         }
       }
     },
@@ -194,16 +212,16 @@
       },
       "rate": "완주 시 1회",
       "direction": "Core(A) -> UI(D)",
-      "description": "명세서 §6-2 회귀 기준값과 같은 형식의 요약. v3.2 기준 모드 B 는 makespan 64.23, P0 도착 47.60.",
+      "description": "명세서 §6-2 회귀 기준값과 같은 형식의 요약. v3.3 기준 모드 B 는 makespan 94.47, P0 도착 71.07.",
       "example": {
         "kind": "kpi",
         "mode": "B",
-        "makespan": 64.23,
+        "makespan": 94.47,
         "orders": {
           "O-4": {
             "priority": 0,
-            "arrive": 47.6,
-            "wait": 13.13
+            "arrive": 71.07,
+            "wait": 0.0
           }
         },
         "arrival_order": [

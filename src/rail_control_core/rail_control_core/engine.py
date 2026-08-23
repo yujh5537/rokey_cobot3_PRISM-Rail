@@ -29,10 +29,94 @@ class Engine:
 
     # ---------- 조회 ----------
     def speed(self, block_id: str, c=None) -> float:
-        v = self.p["speed_shaft"] if block_id.startswith("SB") else self.p["speed_default"]
+        """순항 속도 (ETA·파도 계산용). 곡선 존 감속은 위치 의존이라 limit_at 에서만.
+        화물 등급 운영 정의: P0 즉시 / P1 최대한 빨리 -> 상시 v_max,
+        P2 정시 -> 평시 v_nominal + RTA 회복(v_cmd), P3 완수 -> 고유 상한(0.7)."""
+        if block_id.startswith("SB"):
+            v = self.p["speed_shaft"]
+        else:
+            v = self.p["v_nominal"]
+            if c is not None and c.order is not None:
+                o = c.order
+                if o.prio <= 1:
+                    v = self.p["v_max"]
+                elif o.v_cmd:
+                    v = o.v_cmd
         if c is not None and c.order is not None and c.order.speed:
             v = min(v, c.order.speed)
         return v
+
+    def limit_at(self, c: Capsule) -> float:
+        """현 위치의 순간 속도 상한 = 순항 속도 ∧ 곡선·분기 통과 감속(A1: 0.5)."""
+        v = self.speed(c.block, c)
+        if c.block in T.JUNCTION_BLOCKS:
+            return min(v, self.p["speed_curve"])
+        zones = T.CURVE_ZONES.get(c.block)
+        if zones:
+            arc = c.pos if c.fwd else T.BLOCKS[c.block][2] - c.pos
+            for s0, e0 in zones:
+                if s0 <= arc <= e0:
+                    return min(v, self.p["speed_curve"])
+        return v
+
+    def _remaining_dist(self, c: Capsule) -> float:
+        d = 0.0
+        if c.block is not None and c.idx >= 0:
+            d += max(0.0, T.BLOCKS[c.block][2] - c.pos)
+        for bid, _ in c.route[max(c.idx + 1, 0):]:
+            d += T.BLOCKS[bid][2]
+        return d
+
+    def _rta_control(self):
+        """RTA 슬랙 회복 제어 (P2 전용) + 회복 불가 시 P1 자동 승격 (R11/R12).
+        slack = due - (t + 잔여거리/v_nominal). 임계 미만이면 필요 속도를 역산해
+        v_cmd 로 지령, v_max 로도 불가하면 등급 승격(선점 대상 제외 전환)."""
+        for o in self.orders.values():
+            if o.state != OrderState.EN_ROUTE or o.prio != 2:
+                continue
+            caps = [self.capsules[cid] for cid in o.capsule_ids]
+            caps = [c for c in caps if c.state not in (CapsuleState.REMOVED,
+                                                       CapsuleState.UNLOADING)]
+            if not caps:
+                continue
+            # 이질 속도 구간 분해: 샤프트(0.5 고정)는 시간이 불변이라 회복 불가 구간.
+            # 슬랙과 필요속도는 '가변(수평) 구간'만으로 산정해야 과소 지령을 막는다.
+            c_ref = max(caps, key=self._remaining_dist)
+            rem_fixed_t, rem_var = 0.0, 0.0
+            if c_ref.block is not None and c_ref.idx >= 0:
+                d = max(0.0, T.BLOCKS[c_ref.block][2] - c_ref.pos)
+                if c_ref.block.startswith("SB"):
+                    rem_fixed_t += d / self.p["speed_shaft"]
+                else:
+                    rem_var += d
+            for bid, _ in c_ref.route[max(c_ref.idx + 1, 0):]:
+                L = T.BLOCKS[bid][2]
+                if bid.startswith("SB"):
+                    rem_fixed_t += L / self.p["speed_shaft"]
+                else:
+                    rem_var += L
+            slack = o.due_t - (self.t + rem_fixed_t + rem_var / self.p["v_nominal"])
+            if slack >= self.p["rta_slack_threshold"]:
+                o.v_cmd = None
+                continue
+            t_left = max(o.due_t - self.t - rem_fixed_t, 1e-6)
+            v_req = rem_var / t_left * (1.0 + self.p["rta_margin"])
+            if v_req > self.p["v_max"]:
+                o.prio = 1
+                o.promoted = True
+                o.v_cmd = None
+                self.log("PRIORITY_PROMOTED", o.oid,
+                         f"P2->P1 (v_req={v_req:.2f}>v_max={self.p['v_max']})")
+            else:
+                cmd = min(max(v_req, self.p["v_nominal"]), self.p["v_max"])
+                # 래치: 회복 중 지령은 단조 유지 (비례식의 just-in-time 수렴 방지)
+                if o.v_cmd is not None:
+                    cmd = max(cmd, o.v_cmd)
+                thresh = self.p["v_nominal"] * 1.05
+                if cmd >= thresh and (o.v_cmd is None or o.v_cmd < thresh):
+                    self.log("RTA_ENGAGED", o.oid,
+                             f"slack={slack:.1f}s v_cmd={cmd:.2f}")
+                o.v_cmd = cmd
 
     def remaining_blocks(self, c: Capsule) -> list[str]:
         start = max(c.idx, 0)
@@ -286,6 +370,9 @@ class Engine:
                     if c.state in (CapsuleState.QUEUED, CapsuleState.STANDBY):
                         c.state = CapsuleState.MOVING
 
+        if self.mode == "B":
+            self._rta_control()   # R11/R12: 모드 B 전용 (모드 A=베이스라인은 평시 속도 고정)
+
         # 이동 + 하역
         for c in self.capsules.values():
             if c.state == CapsuleState.UNLOADING and self.t >= c.unload_until:
@@ -305,7 +392,10 @@ class Engine:
             i = occ.index(c)
             if i > 0:
                 limit = min(limit, occ[i - 1].pos - self.p["pitch"])
-            new_pos = min(c.pos + self.speed(c.block, c) * DT, max(limit, c.pos))
+            v_tgt = self.limit_at(c)
+            v = min(v_tgt, c.vel + self.p["accel"] * DT)  # 가속 0.8 제한(용혈), 감속 즉시(보수)
+            new_pos = min(c.pos + v * DT, max(limit, c.pos))
+            c.vel = max(0.0, (new_pos - c.pos) / DT)
             if new_pos > c.pos + 1e-9:
                 self._note_progress()
             c.pos = new_pos

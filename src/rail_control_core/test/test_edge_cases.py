@@ -1,5 +1,5 @@
 """엣지케이스 테스트 (5일차) — 시연 시나리오 밖의 극한 상황 검증.
-실행: python3 -m pytest test/ -q   (또는 python3 test/test_edge_cases.py)
+실행: python3 tests/test_edge_cases.py
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -53,19 +53,30 @@ def test_burst_mode_b_completes_safely():
     assert max(arr.values()) < 120
 
 
-def test_burst_mode_a_gridlocks_and_is_detected():
-    """[발표 논거] 동일 폭주에서 모드 A(FCFS)는 정면 그리드락에 빠진다 —
-    선점(모드 B) 없이는 양방향 단선에서 회피 불가능함을 증명하는 음성 테스트.
-    관제는 이를 20초 무진행 시 DEADLOCK 이벤트로 감지·통보해야 한다."""
-    eng = build_custom("A", BURST_DEFS, BURST_STANDBY, convoy=CONVOY_ROUTES)
-    for _ in range(int(90 * 30)):
+GRIDLOCK_DEFS = [  # v3.3 최종 좌표에서 A를 확정 교착시키는 간섭 구성 (P3 발령 24s, 스캔 검증)
+    ("O-1", 3, "P3_CSR", 24.0, ["C05"], 0.7),
+    ("O-2", 2, "P2_ICU", 1.0, ["C06"], None),
+    ("O-3", 1, "P1_ICU", 2.0, ["C07"], None),
+    ("O-4", 0, None, 8.0, ["C01", "C02", "C03", "C04"], None),
+]
+
+
+def test_gridlock_mode_a_detected_mode_b_survives():
+    """[발표 논거] 같은 간섭 구성에서 모드 A(FCFS)는 정면 그리드락 —
+    선점 없이는 양방향 단선에서 회피 불가능함을 증명하는 음성 테스트.
+    관제는 20초 무진행 시 DEADLOCK 이벤트로 대치 당사자까지 통보하고,
+    모드 B는 동일 구성을 대피 기동으로 완주한다."""
+    eng = build_custom("A", GRIDLOCK_DEFS, BURST_STANDBY, convoy=CONVOY_ROUTES)
+    for _ in range(int(120 * 30)):
         eng.tick()
         if any(e[1] == "DEADLOCK" for e in eng.events):
             break
     dl = [e for e in eng.events if e[1] == "DEADLOCK"]
     assert dl, "그리드락 미감지"
     assert "C05" in dl[0][3] and "C01" in dl[0][3]   # 대치 당사자 포함 통보
-    # 같은 폭주를 모드 B는 완주함 (test_burst_mode_b_completes_safely 에서 검증)
+    eng_b = build_custom("B", GRIDLOCK_DEFS, BURST_STANDBY, convoy=CONVOY_ROUTES)
+    eng_b, v = _run_checked(eng_b)
+    assert not v, v[:5]
 
 
 # ── ② EVAC_SPUR 강제: 2F->B1F 역방향 배송이 콘보이와 본선 대향 ──────
@@ -74,7 +85,7 @@ def test_evac_spur_forced():
     대피(EVAC_SPUR)했다가 콘보이 통과 후 왕복 복귀해 완주해야 한다."""
     defs = [
         ("O-X", 3, "X_ICU_PHM", 0.0, ["C05"], None),
-        ("O-4", 0, None, 17.5, ["C01", "C02", "C03", "C04"], None),
+        ("O-4", 0, None, 34.0, ["C01", "C02", "C03", "C04"], None),  # v3.3: 캡슐 BB-01 진입 직후 파도 (33~35 창 중앙, 스캔 검증)
     ]
     eng = build_custom("B", defs, {"C05": "X_ICU_PHM"}, convoy=CONVOY_ROUTES)
     eng, v = _run_checked(eng)
@@ -126,7 +137,7 @@ def test_burst_determinism():
 
 
 if __name__ == "__main__":
-    for fn in [test_burst_mode_b_completes_safely, test_burst_mode_a_gridlocks_and_is_detected,
+    for fn in [test_burst_mode_b_completes_safely, test_gridlock_mode_a_detected_mode_b_survives,
                test_evac_spur_forced, test_code_crimson_timing, test_burst_determinism]:
         fn()
         print(f"PASS {fn.__name__}")

@@ -6,19 +6,28 @@ from .fsm import Order, Capsule, CapsuleState
 from . import topology as T
 
 PARAMS = {
-    "speed_default": 1.5,
-    "speed_shaft": 1.0,
+    # A1 속도 체계 (2026-08-23 확정): 수평 평시 1.0 / 회복상한 2.0, 샤프트 0.5, 곡선·분기 0.5
+    "v_nominal": 1.0,
+    "v_max": 2.0,
+    "speed_shaft": 0.5,
+    "speed_curve": 0.5,
+    "accel": 0.8,               # 가속 제한 [m/s^2] (용혈 방지)
+    # RTA 슬랙 회복 (R11) / 자동 승격 (R12)
+    "rta_slack_threshold": 10.0,
+    "rta_margin": 0.4,
     "pitch": 0.9,
     "yield_window_sec": 15.0,
     "unload_sec": 2.0,
     "stall_timeout_sec": 20.0,
-    "priority_due_sec": {0: 60, 1: 180, 2: 600, 3: 1800},
+        # 시연 스케일 due (A2 확정): 선점 지연이 슬랙을 실제로 위협하는 값.
+    # 실세계 값(P1 180 / P2 600 / P3 1800)은 명세서 §6-1 비고에 병기.
+    "priority_due_sec": {0: 30, 1: 40, 2: 85, 3: 130},
 }
 
 # 오더: (id, prio, route, release_t, capsule_ids)
 # (id, prio, route, release_t, capsules, speed_cap)
 ORDER_DEFS = [
-    ("O-1", 3, "P3_CSR", 10.0, ["C05"], 0.7),   # 오염 기구: 저속 운송 규정 0.7m/s
+    ("O-1", 3, "P3_CSR", 14.0, ["C05"], 0.7),   # 오염 기구: 저속 운송 규정 0.7m/s
     ("O-2", 2, "P2_ICU", 1.0, ["C06"], None),
     ("O-3", 1, "P1_ICU", 2.0, ["C07"], None),
     ("O-4", 0, None, 8.0, ["C01", "C02", "C03", "C04"], None),  # Code Crimson 콘보이

@@ -42,6 +42,8 @@ class Order:
     arrive_t: float | None = None   # 마지막 캡슐 도착 시각
     wait_total: float = 0.0         # 양보·대피 누적 대기(지연 비용 가시화용)
     speed: float | None = None      # 오더별 속도 상한(예: P3 오염 기구 저속 규정)
+    v_cmd: float | None = None      # RTA 회복 지령 속도 (R11). None = 평시 순항
+    promoted: bool = False          # R12 등급 승격(P2->P1) 여부 — 회복 불가 판정 시
 
 
 @dataclass
@@ -57,3 +59,4 @@ class Capsule:
     detour: str | None = None  # 대피 중인 레인/지선 블록 id
     unload_until: float = 0.0
     req_t: float = float("inf")  # 현재 블록 진입 요청 시각(FCFS용)
+    vel: float = 0.0           # 현재 속도(m/s) — 가속 램프(용혈 방지 0.8m/s²)용
