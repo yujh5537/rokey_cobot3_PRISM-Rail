@@ -44,11 +44,12 @@
 
 브릿지 처리: `for c in msg.capsules:` → `/World/Capsules/{c.capsule_id}` 트랜스폼 = (c.x, c.y, c.z).
 
-> **[확인 대기]** 실제 브릿지(`isaacpjt/scripts/isaac_twin_m2_bridge.py`)는 프림을
-> `/World/Capsules/Capsule_01` 형식으로 씁니다. 브릿지가 내부에서 `capsule_id` → 프림을
-> 매핑하므로 동작에는 문제가 없습니다. 명명 규약을 코드(`Capsule_01`) 기준으로 확정할지
-> 석형님 회신 후 이 문서를 실물에 맞춰 고칩니다.
-`state == "REMOVED"` 면 프림 숨김(visibility off) 권장. 경로 규약 `/World/Capsules/C01~C10` 유지.
+> **[확정 — 2026-08-23 종결]** 씬 프림 명명은 **`/World/Capsules/Capsule_01`~`Capsule_10`** 형식.
+> 근거: ① B 2차 좌표 핸드오프 §17 CAPSULE MODEL `world_paths` 명시 + §19 `C01↔Capsule_01` 대응표
+> (2026-08-23, 팀 채팅 전달 PDF) ② B 구두 확정 (2026-08-22, "Capsule_01이 가장 나을거같습니다")
+> ③ 실기 브릿지 코드 일치 (`isaacpjt/scripts/isaac_twin_m2_bridge.py:185`).
+> msg `capsule_id`(C01~C10) ↔ 프림(Capsule_01~10) 대응은 브릿지 내부 매핑 — 스키마 변경 없음.
+`state == "REMOVED"` 면 프림 숨김(visibility off) 권장.
 
 ## 2. /capsule_cmd — **폐기**
 

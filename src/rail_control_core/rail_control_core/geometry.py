@@ -9,7 +9,7 @@
 - 샤프트: SB-UP x=-7.25, SB-DN x=-6.75 (복선), y=-5.0, z는 진행률로 4.0<->13.0 보간
 - 일반 블록: BLOCK_PATHS 폴리라인(없으면 노드 직선)을 따라 진행률 보간
   * NORMALIZED 블록은 폴리라인 실길이 != 실측 길이라 비율 매핑(시각화 근사)
-- DOCKED 캡슐: 디포 측면 베이 가상 슬롯(DOCK_SLOTS)에 배치 [B 도크 좌표 회신 시 교체]
+- DOCKED 캡슐: 디포 측면 슬롯(DOCK_SLOTS)에 배치 — 관제 정의가 정본 (B 확인 2026-08-23)
 """
 from . import topology as T
 
@@ -44,6 +44,7 @@ def pose_to_xyz(block_id: str, pos_m: float, forward: bool) -> tuple[float, floa
         y = T.NODE_XY["N-W1"][1]
         z0, z1 = (T.RAIL_Z["B1F"], T.RAIL_Z["2F"]) if block_id == "SB-UP" \
             else (T.RAIL_Z["2F"], T.RAIL_Z["B1F"])
+        # 발행원 반올림 원칙: 부동소수 잔재(8.4999...)를 수신측이 처리하게 두지 않는다
         return (x, y, round(z0 + (z1 - z0) * frac, 4))
     pts = T.BLOCK_PATHS.get(block_id, [T.NODE_XY[a], T.NODE_XY[b]])
     if not forward:
@@ -55,6 +56,6 @@ def pose_to_xyz(block_id: str, pos_m: float, forward: bool) -> tuple[float, floa
 
 
 def dock_slot_xyz(slot_index: int) -> tuple[float, float, float]:
-    """디포 도크 가상 슬롯 (DOCKED 캡슐 시각화용, 도크 좌표 확정 전 임시)."""
+    """디포 도크 슬롯 (DOCKED 캡슐 배치, 관제 정의가 정본 — 씬은 이 좌표에 시각물 배치)."""
     x, y = T.DOCK_SLOTS[slot_index % len(T.DOCK_SLOTS)]
     return (x, y, T.RAIL_Z["B1F"])
