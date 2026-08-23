@@ -1,5 +1,6 @@
 """
-kpi_report.py — 모드 A/B 비교표를 뽑아 명세서 §6-2 회귀 기준값과 대조합니다.
+kpi_report.py — 모드 A/B 비교표를 뽑아 명세서 §6-2 회귀 기준값과 대조하고,
+명세서 §3 블록 표가 topology.py 에서 재생성한 결과와 일치하는지 검사합니다.
 
 기준 KPI 는 토폴로지 v3.1 §6-2 에서 'P0 혈액 도착 시각'으로 동결되었습니다.
 이 도구는 그 표를 그대로 재생성하고, 현재 코드가 기준값에서 벗어났는지 표시합니다.
@@ -14,14 +15,58 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
+import io
 import sys
 import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SPEC = ROOT.parent.parent / "docs" / "topology_spec.md"
 sys.path.insert(0, str(ROOT))
 
 from rail_control_core.scenario import ORDER_DEFS, run  # noqa: E402
+
+import gen_spec_tables  # noqa: E402  (같은 tools/ 디렉터리)
+
+
+def _check_spec_section3() -> bool:
+    """명세서 §3 이 topology.py 재생성 결과와 같은지 검사 (수기 편집 탐지).
+
+    §3 은 tools/gen_spec_tables.py 가 생성합니다. 누군가 표를 손으로 고치면
+    코드와 갈라지므로(v3.1~v3.3 에서 8칸 불일치 발생), 여기서 diff 0 을 강제합니다.
+    반환 False = 불일치 (호출자가 exit 1).
+    """
+    if not SPEC.exists():
+        print(f"§3 검사 건너뜀 — {SPEC} 없음")
+        return True
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        gen_spec_tables.main()
+    regen = buf.getvalue().rstrip()
+
+    lines = SPEC.read_text(encoding="utf-8").split("\n")
+    try:
+        i3 = next(i for i, l in enumerate(lines) if l.startswith("## 3. 블록 정의"))
+        i4 = next(i for i, l in enumerate(lines) if l.startswith("## 4. "))
+    except StopIteration:
+        print("⚠️ 명세서에서 §3~§4 경계를 찾지 못했습니다 — 절 제목을 확인하세요.")
+        return False
+    current = "\n".join(lines[i3:i4]).rstrip()
+
+    if current == regen:
+        print("§3 블록 표: ✅ topology.py 와 일치 (30/30, 수기 편집 없음)")
+        return True
+
+    import difflib
+    print("⚠️ §3 블록 표가 topology.py 와 다릅니다 — 표를 손으로 고치지 마십시오.")
+    print("   해결: python3 src/rail_control_core/tools/gen_spec_tables.py 로 재생성해 §3 을 교체")
+    print("   (설명 문구를 바꾸려면 gen_spec_tables.py 의 NOTE 딕셔너리를 고칠 것)")
+    for line in list(difflib.unified_diff(
+            current.split("\n"), regen.split("\n"),
+            fromfile="docs/topology_spec.md §3", tofile="재생성", lineterm=""))[:20]:
+        print("   " + line)
+    return False
 
 
 def _load_baselines():
@@ -111,11 +156,15 @@ def main() -> None:
     print("  · 선점(모드 B)은 P0 관련 지표만 개선합니다. 하위 오더를 뒤로 미루므로")
     print("    makespan·P2·P3 는 오히려 나빠지며, 그 값이 곧 '양보 비용'입니다.")
     print("  · 그래서 §6-2 의 헤드라인 지표는 P0 도착 시각입니다.")
+    print()
+    spec_ok = _check_spec_section3()
+
     if drift:
         print()
         print("⚠️ 기준값 이탈 — 명세서 §6-2 와 test/test_regression.py 를 함께 갱신하세요:")
         for oid, va, ea, vb, eb in drift:
             print(f"   {oid}: A {va} (기준 {ea}) / B {vb} (기준 {eb})")
+    if drift or not spec_ok:
         sys.exit(1)
 
 
