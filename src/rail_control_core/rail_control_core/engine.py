@@ -409,7 +409,11 @@ class Engine:
             occ = self.occ[c.block]
             i = occ.index(c)
             if i > 0:
-                limit = min(limit, occ[i - 1].pos - self.p["pitch"])
+                prev_c = occ[i - 1]
+                # P0 콘보이 캡슐끼리는 블록 내 차두 0.9m 피치 감속을 면제하여 밀착 이동 폐색 주행
+                is_both_p0 = (c.order and c.order.prio == 0 and prev_c.order and prev_c.order.prio == 0)
+                if not is_both_p0:
+                    limit = min(limit, prev_c.pos - self.p["pitch"])
             v_tgt = self.limit_at(c)
             v = min(v_tgt, c.vel + self.p["accel"] * DT)  # 가속 0.8 제한(용혈), 감속 즉시(보수)
             new_pos = min(c.pos + v * DT, max(limit, c.pos))
