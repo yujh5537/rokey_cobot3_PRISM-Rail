@@ -140,8 +140,14 @@ def _pad(s, width: int, right: bool = False) -> str:
 
 
 PRIO = {oid: prio for oid, prio, *_ in ORDER_DEFS}
-LABEL = {"O-1": "P3 오염기구", "O-2": "P2 항암제",
-         "O-3": "P1 응급약품", "O-4": "P0 혈액(콘보이)"}
+# v3.6: O-1 이 '멸균 공급'으로 역전되고 O-5 '사용 기구 회수'가 신설됨.
+# 시나리오에 오더가 늘어도 죽지 않도록 미등록 id 는 등급 표기로 대체한다.
+LABEL = {"O-1": "P3 멸균 공급", "O-2": "P2 항암제", "O-3": "P1 응급약품",
+         "O-4": "P0 혈액(콘보이)", "O-5": "P3 기구 회수"}
+
+
+def _label(oid: str) -> str:
+    return LABEL.get(oid, f"P{PRIO[oid]} {oid}")
 
 
 def main() -> None:
@@ -154,7 +160,7 @@ def main() -> None:
 
     rows = []
     drift = []
-    for oid in sorted(PRIO, key=lambda o: PRIO[o]):
+    for oid in sorted(PRIO, key=lambda o: (PRIO[o], o)):   # 동순위는 id 순 (표 순서 고정)
         va = a["orders"][oid]["arrive"]
         vb = b["orders"][oid]["arrive"]
         diff = round(vb - va, 2)
@@ -162,7 +168,7 @@ def main() -> None:
         ok = (abs(va - base_a[oid]) <= tol and abs(vb - base_b[oid]) <= tol)
         if not ok:
             drift.append((oid, va, base_a[oid], vb, base_b[oid]))
-        rows.append((LABEL[oid], va, vb, diff, pct, "✅" if ok else "⚠️ 이탈"))
+        rows.append((_label(oid), va, vb, diff, pct, "✅" if ok else "⚠️ 이탈"))
 
     ms_a, ms_b = a["makespan"], b["makespan"]
 

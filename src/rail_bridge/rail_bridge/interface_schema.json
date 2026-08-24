@@ -27,6 +27,11 @@
       "콘보이 목적지 OR1/OR2 분산 -> ST-OR2 단일 집결 (4대 전원, 지선에서 순차 도킹). msg 스키마 변경 없음.",
       "R9 개정 — Code Crimson 활성 중 콘보이 캡슐에 한해 블록 점유 상한 개방(convoy_bunch_cap=4). /block_state 의 capacity 는 이제 '유효 용량'으로 발행되므로 UI 는 캐시하지 말고 매 수신값을 쓸 것 (키·구조는 그대로).",
       "회귀 기준값 재측정: 모드 A 71.20 / 모드 B 85.77, P0 도착 71.20->67.07(-5.8%). P2 due 85->77(마감 abs 78). v3.3 의 73.70/94.47·71.07 은 폐기."
+    ],
+    "v3_6_changes": [
+      "이벤트 어휘 추가: MEET_PASS (R13 교행 — 대향 캡슐과 스쳐 지나가려 쌍둥이 대피 레인으로 치환). detail 은 \"B2-07a->B2-07b\" 형식. msg 구조·키 불변.",
+      "시나리오 변경: O-1 이 '멸균 물품 공급'(ST-CSR->ST-OR1, 발령 2.0s)으로 역전되고, 짝 오더 O-5 '사용 기구 회수'(ST-OR1->ST-CSR, 17.0s, C08)가 신설됨. 선배치 C05@ST-CSR / C08@ST-OR1, 디포 유휴는 C09·C10 만.",
+      "회귀 기준값 재측정: 모드 A 71.17 / 모드 B 85.77, P0 도착 71.17->67.07(-5.8%). 멸균 공급은 양 모드 동률 36.17 (콘보이와 동방향 무간섭)."
     ]
   },
   "topics": {
@@ -88,13 +93,14 @@
         "YIELD",
         "EVAC_LANE",
         "EVAC_SPUR",
+        "MEET_PASS",
         "FINISH_ALLOWED",
         "RESUME",
         "ARRIVE"
       ],
       "fields": {
         "subject": "오더 id(오더 이벤트) 또는 캡슐 id(캡슐 이벤트)",
-        "detail": "이벤트별 맥락. EVAC_* 는 \"B2-04a->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=85.77\", DEADLOCK 은 \"무진행 20s, 대기: C05@...\", RTA_ENGAGED 는 \"slack=3.8s v_cmd=1.05\"",
+        "detail": "이벤트별 맥락. EVAC_* 와 MEET_PASS 는 \"B2-04a->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=85.77\", DEADLOCK 은 \"무진행 20s, 대기: C05@...\", RTA_ENGAGED 는 \"slack=3.8s v_cmd=1.05\"",
         "reason": "선점 계열에만. 사람이 읽는 설명 (R2~R4 근거)",
         "by": "선점 계열에만. 선점을 유발한 P0 오더 id"
       },
@@ -110,32 +116,44 @@
           "state": "EN_ROUTE"
         },
         "preempt": {
-          "sim_t": 20.0,
+          "sim_t": 32.9,
           "kind": "order_event",
           "event": "EVAC_LANE",
-          "subject": "C05",
+          "subject": "C08",
           "detail": "B2-05->B2-04b",
-          "capsule": "C05",
-          "order_id": "O-1",
+          "capsule": "C08",
+          "order_id": "O-5",
           "priority": 3,
           "by": "O-4",
           "reason": "Code Crimson 콘보이 회랑 확보를 위해 대피 레인으로 회피 (R3)"
         },
         "deadlock": {
-          "sim_t": 52.37,
+          "sim_t": 87.3,
           "kind": "order_event",
           "event": "DEADLOCK",
           "subject": "sim",
-          "detail": "무진행 20s, 대기: C05@B2-04a,C01@B2-03,C02@B2-02,C03@B2-01,C04@SB-UP"
+          "detail": "무진행 20s, 대기: C05@B2-06,C08@B2-07a"
         },
         "rta": {
-          "sim_t": 52.63,
+          "sim_t": 44.63,
           "kind": "order_event",
           "event": "RTA_ENGAGED",
           "subject": "O-2",
           "detail": "slack=3.8s v_cmd=1.05",
           "priority": 2,
           "state": "EN_ROUTE"
+        },
+        "meet_pass": {
+          "sim_t": 26.1,
+          "kind": "order_event",
+          "event": "MEET_PASS",
+          "subject": "C05",
+          "detail": "B2-07a->B2-07b",
+          "capsule": "C05",
+          "order_id": "O-1",
+          "priority": 3,
+          "by": "C08",
+          "reason": "대향 캡슐과 교행 — 쌍둥이 대피 레인으로 치환해 스쳐 지나감 (R13)"
         }
       }
     },

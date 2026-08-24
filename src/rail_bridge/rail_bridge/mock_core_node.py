@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """mock_core — 관제 코어 대역. 실코어 없이 씬(B)·UI(D) 를 단독으로 붙여볼 때 씁니다.
 
-관제 코어 v3.5 규격(docs/C연동_매핑표.md)으로 발행합니다:
+관제 코어 v3.6 규격(docs/C연동_매핑표.md)으로 발행합니다:
   /capsule_pose  BEST_EFFORT depth1  30Hz  캡슐 위치 + 씬 월드 xyz
   /order_event   RELIABLE   depth50        오더·선점·대피 이벤트
   /block_state   RELIABLE + TRANSIENT_LOCAL depth1  변화 시에만
@@ -9,7 +9,7 @@
 ⚠️ 실코어(rail_control_core) 와 **동시에 켜지 마세요** — 같은 토픽을 두 노드가
    발행해 수신측이 뒤섞인 값을 받습니다. 하나만 띄우세요.
 
-시연 4장면 타임라인을 반복 재생합니다 (좌표는 topology 실측값 근사).
+시연 5장면 타임라인을 반복 재생합니다 (좌표는 topology 실측값 근사).
 """
 import json
 
@@ -30,14 +30,21 @@ QOS_LATCHED = QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST,
 RATE_HZ = 30.0
 STEP_SEC = 3.0                      # 장면 전환 간격
 
-# (event, subject, detail, block, xyz, state) — 발표 4장면
+# (event, subject, detail, block, xyz, state) — 발표 5장면 (v3.6)
 # 이벤트 이름은 실코어가 내는 것과 동일해야 UI 가 코드를 안 고칩니다.
+#
+# ⚠️ 아래 수치(ORDER_ARRIVE / SIM_DONE)는 회귀 기준값 BASE_B 와 같아야 합니다.
+#    손으로 맞추다 v3.3→v3.5 구간에서 두 번 어긋났고(플랜 B 전환 시 심사 화면에
+#    옛 수치가 뜨는 사고), 지금은 test_regression.py 의
+#    test_mock_core_timeline_matches_baseline 이 드리프트를 실패로 잡습니다.
+#    수치를 고칠 때는 BASE_B 를 고치고 여기를 맞추면 테스트가 확인해 줍니다.
 TIMELINE = [
     ("ORDER_RELEASE",  "O-4", "P0",              "C01", "BB-09",  (6.5, -4.0, 4.0),  "MOVING"),
-    ("YIELD",          "C06", "BB-01:locked",    "C06", "SP-INJ", (-4.5, -2.0, 4.0), "YIELD_WAIT"),
+    ("YIELD",          "C06", "BB-01:capacity",  "C06", "SP-INJ", (-4.5, -2.0, 4.0), "YIELD_WAIT"),
     ("FINISH_ALLOWED", "C07", "SB-UP",           "C07", "SB-UP",  (-7.25, -5.0, 8.5), "FINISHING"),
-    ("EVAC_SPUR",      "C05", "B2-04a->B2-04b",  "C05", "B2-04b", (-0.7, -1.4, 13.0), "EVACUATED"),
-    ("RESUME",         "C05", "B2-04a",          "C05", "B2-04a", (1.0, -2.0, 13.0), "MOVING"),
+    ("MEET_PASS",      "C05", "B2-07a->B2-07b",  "C05", "B2-07b", (3.2, 2.6, 13.0),  "MOVING"),
+    ("EVAC_LANE",      "C08", "B2-05->B2-04b",   "C08", "B2-04b", (-0.7, -1.4, 13.0), "EVACUATED"),
+    ("RESUME",         "C08", "B2-03",           "C08", "B2-03",  (1.0, -2.0, 13.0), "MOVING"),
     ("ORDER_ARRIVE",   "O-4", "t=67.07",         "C01", "B2-09",  (4.5, -0.8, 13.0), "UNLOADING"),
     ("SIM_DONE",       "sim", "makespan=85.77",  "C01", "",       (0.0, 0.0, 0.0),   "REMOVED"),
 ]
@@ -45,6 +52,7 @@ TIMELINE = [
 REASON = {
     "YIELD": "상위 등급 통과 대기 — 진입 전 양보 (R2)",
     "EVAC_LANE": "Code Crimson 콘보이 회랑 확보를 위해 대피 레인으로 회피 (R3)",
+    "MEET_PASS": "대향 캡슐과 교행 — 쌍둥이 대피 레인으로 치환해 스쳐 지나감 (R13)",
     "EVAC_SPUR": "Code Crimson 콘보이 회랑 확보를 위해 지선으로 회피 (R3)",
     "FINISH_ALLOWED": "이미 진입한 블록은 역주행 불가 — 완주 허용 (R4)",
     "RESUME": "선점 파도 통과 완료 — 주행 재개",
@@ -95,7 +103,7 @@ class MockCoreNode(Node):
     # ------------------------------------------------------------------
     def on_step(self):
         if self.idx >= len(TIMELINE):
-            self.get_logger().info("🏁 4장면 전체 발행 완료. 반복합니다.")
+            self.get_logger().info("🏁 5장면 전체 발행 완료. 반복합니다.")
             self.idx = 0
             return
 
