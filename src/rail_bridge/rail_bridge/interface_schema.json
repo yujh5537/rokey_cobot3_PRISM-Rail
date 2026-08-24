@@ -32,6 +32,11 @@
       "이벤트 어휘 추가: MEET_PASS (R13 교행 — 대향 캡슐과 스쳐 지나가려 쌍둥이 대피 레인으로 치환). detail 은 \"B2-07a->B2-07b\" 형식. msg 구조·키 불변.",
       "시나리오 변경: O-1 이 '멸균 물품 공급'(ST-CSR->ST-OR1, 발령 2.0s)으로 역전되고, 짝 오더 O-5 '사용 기구 회수'(ST-OR1->ST-CSR, 17.0s, C08)가 신설됨. 선배치 C05@ST-CSR / C08@ST-OR1, 디포 유휴는 C09·C10 만.",
       "회귀 기준값 재측정: 모드 A 71.17 / 모드 B 85.77, P0 도착 71.17->67.07(-5.8%). 멸균 공급은 양 모드 동률 36.17 (콘보이와 동방향 무간섭)."
+    ],
+    "v3_6_1_changes": [
+      "노드 셋백: 진입 대기 캡슐의 정차 위치가 블록 끝이 아니라 '끝 - 0.4m'. /capsule_pose 의 pos_m·x/y/z 가 그만큼 앞에서 멈춘 값으로 발행된다 (씬은 수정 불필요 — 좌표만 바뀜).",
+      "대피 홀드: EVACUATED 캡슐은 대피 레인 중앙(50%)에 정지해 파도가 완전히 지날 때까지 대기. 기존의 레인 내 왕복 이동이 사라진다.",
+      "회귀 기준값 재측정: 모드 A 74.97 / 모드 B 86.77, P0 도착 70.77->67.07(-5.2%). P2 76.47(여유 1.53) / RTA OFF 80.00. 이벤트 어휘 변화 없음."
     ]
   },
   "topics": {
@@ -100,7 +105,7 @@
       ],
       "fields": {
         "subject": "오더 id(오더 이벤트) 또는 캡슐 id(캡슐 이벤트)",
-        "detail": "이벤트별 맥락. EVAC_* 와 MEET_PASS 는 \"B2-04a->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=85.77\", DEADLOCK 은 \"무진행 20s, 대기: C05@...\", RTA_ENGAGED 는 \"slack=3.8s v_cmd=1.05\"",
+        "detail": "이벤트별 맥락. EVAC_* 와 MEET_PASS 는 \"B2-04a->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=86.77\", DEADLOCK 은 \"무진행 20s, 대기: C05@...\", RTA_ENGAGED 는 \"slack=4.0s v_cmd=1.05\"",
         "reason": "선점 계열에만. 사람이 읽는 설명 (R2~R4 근거)",
         "by": "선점 계열에만. 선점을 유발한 P0 오더 id"
       },
@@ -128,18 +133,18 @@
           "reason": "Code Crimson 콘보이 회랑 확보를 위해 대피 레인으로 회피 (R3)"
         },
         "deadlock": {
-          "sim_t": 87.3,
+          "sim_t": 88.23,
           "kind": "order_event",
           "event": "DEADLOCK",
           "subject": "sim",
           "detail": "무진행 20s, 대기: C05@B2-06,C08@B2-07a"
         },
         "rta": {
-          "sim_t": 44.63,
+          "sim_t": 44.1,
           "kind": "order_event",
           "event": "RTA_ENGAGED",
           "subject": "O-2",
-          "detail": "slack=3.8s v_cmd=1.05",
+          "detail": "slack=4.0s v_cmd=1.05",
           "priority": 2,
           "state": "EN_ROUTE"
         },
@@ -238,11 +243,11 @@
       },
       "rate": "완주 시 1회",
       "direction": "Core(A) -> UI(D)",
-      "description": "명세서 §6-2 회귀 기준값과 같은 형식의 요약. v3.5 기준 모드 B 는 makespan 85.77, P0 도착 67.07.",
+      "description": "명세서 §6-2 회귀 기준값과 같은 형식의 요약. v3.6.1 기준 모드 B 는 makespan 86.77, P0 도착 67.07.",
       "example": {
         "kind": "kpi",
         "mode": "B",
-        "makespan": 85.77,
+        "makespan": 86.77,
         "orders": {
           "O-4": {
             "priority": 0,

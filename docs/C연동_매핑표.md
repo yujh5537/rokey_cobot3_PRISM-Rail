@@ -100,7 +100,7 @@ ros2 service call /sim_start std_srvs/srv/Trigger
 - **mock_sim**: `/capsule_pose` 발행 코드 → **구독**으로 변경 (코어→씬 단방향). 수신 xyz를 프림에 적용만.
 - **mock_core**: 발행 스키마를 위 msg 타입으로 교체, ID 를 C01/O-4 체계로. 시연 5장면 이벤트는
   실제 코어가 내는 이름(YIELD, FINISH_ALLOWED, **EVAC_LANE**, **MEET_PASS**, RESUME, RTA_ENGAGED, SIM_DONE)과 동일하게.
-  ⚠️ v3.5 기준 mock 타임라인 수치도 실코어와 맞춰 두었습니다(ORDER_ARRIVE t=67.07 / SIM_DONE 85.77,
+  ⚠️ mock 타임라인 수치도 실코어와 맞춰 두었습니다(v3.6.1 기준 ORDER_ARRIVE t=67.07 / SIM_DONE 86.77,
   콘보이 도착부 B2-09=OR2) — 플랜 B로 전환해도 심사 화면 수치가 달라지지 않게 하기 위함입니다.
 - 검증: 실코어 노드를 켜고 `ros2 topic echo /capsule_pose` 값과 mock 처리 결과가 같은 프림 위치를
   만드는지 1회 대조하면 끝.

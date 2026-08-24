@@ -29,6 +29,9 @@ engine:
   convoy_bunch_cap: 4
   # R13(v3.6) 교행 — 3부 OFF/ON 대조 녹화용 토글. ⚠️ 녹화 후 반드시 true 로 원복.
   meet_pass_enabled: true
+  # v3.6.1 씬 실사 반영 — 노드는 공유 기하라 끝점 정지 시 통과 캡슐과 겹침.
+  node_setback: 0.4      # m — 진입 거부 시 블록 끝에서 물러나 정지하는 거리
+  evac_hold_frac: 0.5    # 대피 레인 내 홀드 지점(길이 비율) — 재진입 진동 방지
   pitch: 0.9             # m — 캡슐 점유 피치 (길이 0.6 + 안전간격 0.3)
   yield_window_sec: 15.0 # P0 선점 잠금 파도(bow-wave) 폭
   unload_sec: 2.0        # 목적지 하역 소요
@@ -54,6 +57,6 @@ reference:
 
 # ---------- 회귀 기준값 (명세서 §6-2, 2026-08-24 v3.5 재측정) ----------
 baseline:
-  mode_a_makespan_s: 71.17
+  mode_a_makespan_s: 74.97
   mode_b_p0_arrive_s: 67.07
   tolerance_s: 0.2
