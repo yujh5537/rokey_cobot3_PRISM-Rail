@@ -121,7 +121,7 @@ python3 -m pytest test/ -v
 
 | 파일 | 개수 | 내용 |
 |---|---|---|
-| `test_regression.py` | 13 | §6-2 회귀 기준값(모드 A 74.97 / 모드 B P0 67.07), 5장면 발생(교행 포함), RTA 회복·등급 승격, R8 안전망 불변식, 블록 중복 점유 없음, 전 오더 완료(교착 방지), `/block_state` 페이로드 스키마, **mock_core 타임라인 드리프트** |
+| `test_regression.py` | 13 | §6-2 회귀 기준값(모드 A 74.97 / 모드 B P0 67.07), 5장면 발생(교행 포함), RTA 회복·등급 승격, R8 안전망 불변식 6종(캡슐 물리 겹침 포함), 블록 중복 점유 없음, 전 오더 완료(교착 방지), `/block_state` 페이로드 스키마, **mock_core 타임라인 드리프트** |
 | `test_bridge.py` | 7 | 제어 명령(start/pause/reset/mode/status), 페이로드 스키마, 변화 시에만 발행, Code Crimson 즉시 발동·중복 거부, SIM_DONE 기준값(=`BASE_B`), 모드 전환 리셋, 좌표 반올림 불변식 |
 | `test_edge_cases.py` | 5 | 5오더 폭주 완주·안전망, **R13 교행 OFF/ON 대조(OFF 시 양 모드 교착 + 감지 / ON 시 완주)**, EVAC_SPUR 강제(역방향 배송 vs 콘보이), Code Crimson 발동 타이밍 3종, 폭주 결정론 |
 
