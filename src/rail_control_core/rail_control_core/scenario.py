@@ -18,6 +18,9 @@ PARAMS = {
     # R9 개정(v3.5): Code Crimson 활성 중 콘보이 캡슐에 한해 블록 점유 상한 개방
     "convoy_bunch_cap": 4,
     "meet_pass_enabled": True,   # R13 교행 (3부 대조 시연용 토글)
+    # v3.6.1 씬 실사 반영: 대기 정지는 노드에서 0.4m 물러남 / 대피는 레인 중앙 홀드
+    "node_setback": 0.4,
+    "evac_hold_frac": 0.5,
     "pitch": 0.9,
     "yield_window_sec": 15.0,
     "unload_sec": 2.0,

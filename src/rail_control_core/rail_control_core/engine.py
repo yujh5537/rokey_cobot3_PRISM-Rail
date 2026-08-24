@@ -326,6 +326,17 @@ class Engine:
                      f"{self.t - self._stall_since:.0f}s, 대기: {','.join(stuck)}")
             self._deadlock_logged = True
 
+    def _evac_clear(self, c: Capsule) -> bool:
+        """대피 홀드 해제: 내 레인·다음 본선 블록이 잠금 밖 + 다음에 대향 점유자 없음."""
+        if c.idx + 1 >= len(c.route):
+            return True
+        nbid, nfwd = c.route[c.idx + 1]
+        locked = getattr(self, "_locked", set())
+        if c.block in locked or nbid in locked:
+            return False
+        # 자기 자신 제외 필수: 지선 왕복은 '같은 블록 역방향' 전이라 본인이 점유자로 잡힘
+        return not any(x is not c and x.fwd != nfwd for x in self.occ[nbid])
+
     def _do_enter(self, c: Capsule, block_id: str, fwd: bool):
         self._note_progress()
         if c.block is not None and c in self.occ[c.block]:
@@ -377,6 +388,7 @@ class Engine:
     def tick(self):
         self.t += DT
         locked = self.locked_blocks() if self.mode == "B" else set()
+        self._locked = locked   # 이동부(대피 홀드) 재사용 (v3.6.1)
 
         # 오더 발령
         for o in self.orders.values():
@@ -406,6 +418,9 @@ class Engine:
                 continue
             _, _, length, _, _ = T.BLOCKS[c.block]
             limit = length
+            if c.state == CapsuleState.EVACUATED and not self._evac_clear(c):
+                # v3.6.1 대피 홀드: 파도가 걷힐 때까지 레인 중앙 정지 (재진입 진동 방지)
+                limit = min(limit, length * self.p.get("evac_hold_frac", 0.5))
             occ = self.occ[c.block]
             i = occ.index(c)
             if i > 0:
@@ -436,7 +451,9 @@ class Engine:
             if c.block is None:
                 continue
             _, _, length, _, _ = T.BLOCKS[c.block]
-            at_end = c.pos >= length - 1e-9
+            _sb = self.p.get("node_setback", 0.0) \
+                if c.state in (CapsuleState.YIELD_WAIT, CapsuleState.EVACUATED) else 0.0
+            at_end = c.pos >= length - _sb - 1e-9
             if not at_end:
                 continue
             if c.idx + 1 >= len(c.route):
@@ -499,6 +516,10 @@ class Engine:
                 if c.state in (CapsuleState.YIELD_WAIT, CapsuleState.EVACUATED):
                     self.log("RESUME", c.cid, nbid)
                     c.detour = None
+                    if c.pos < T.BLOCKS[c.block][2] - 1e-9:
+                        c.state = CapsuleState.MOVING   # 셋백 지점 재개: 잔여 주행 후 통과
+                        c.req_t = float("inf")
+                        continue
                 c.idx += 1
                 self._do_enter(c, nbid, nfwd)
                 c.state = CapsuleState.MOVING
@@ -506,6 +527,9 @@ class Engine:
                 if c.state == CapsuleState.MOVING:
                     c.state = CapsuleState.YIELD_WAIT
                     self.log("YIELD", c.cid, f"{nbid}:{reason}")
+                # v3.6.1 노드 셋백: 노드는 공유 기하 — 끝점 정지는 통과 캡슐과 겹침(씬 실사)
+                _L = T.BLOCKS[c.block][2]
+                c.pos = min(c.pos, max(0.0, _L - self.p.get("node_setback", 0.0)))
                 if c.order:
                     c.order.wait_total += DT
 

@@ -46,7 +46,7 @@ TIMELINE = [
     ("EVAC_LANE",      "C08", "B2-05->B2-04b",   "C08", "B2-04b", (-0.7, -1.4, 13.0), "EVACUATED"),
     ("RESUME",         "C08", "B2-03",           "C08", "B2-03",  (1.0, -2.0, 13.0), "MOVING"),
     ("ORDER_ARRIVE",   "O-4", "t=67.07",         "C01", "B2-09",  (4.5, -0.8, 13.0), "UNLOADING"),
-    ("SIM_DONE",       "sim", "makespan=85.77",  "C01", "",       (0.0, 0.0, 0.0),   "REMOVED"),
+    ("SIM_DONE",       "sim", "makespan=86.77",  "C01", "",       (0.0, 0.0, 0.0),   "REMOVED"),
 ]
 
 REASON = {
