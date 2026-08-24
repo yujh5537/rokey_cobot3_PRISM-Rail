@@ -43,18 +43,22 @@ def _run_checked(eng, until=300.0):
 
 
 # ── ① 오더 폭주: 전 오더가 1.5초 안에 동시 발령 ──────────────────────
-BURST_DEFS = [
-    ("O-1", 3, "P3_CSR", 0.5, ["C05"], 0.7),
+BURST_DEFS = [   # v3.6: 5오더 폭주 (전부 1.5초 내)
+    ("O-1", 3, "P3_OR1", 0.5, ["C05"], 0.7),
+    ("O-5", 3, "P3_CSR", 0.5, ["C08"], 0.7),
     ("O-2", 2, "P2_ICU", 0.5, ["C06"], None),
     ("O-3", 1, "P1_ICU", 1.0, ["C07"], None),
     ("O-4", 0, None, 1.5, ["C01", "C02", "C03", "C04"], None),
 ]
-BURST_STANDBY = {"C05": "P3_CSR", "C06": "P2_ICU", "C07": "P1_ICU"}
+# C08 이 선배치로 빠지므로 build_custom 의 idle 기본값에서 반드시 제외할 것 (이중 배치 방지)
+BURST_STANDBY = {"C05": "P3_OR1", "C08": "P3_CSR", "C06": "P2_ICU", "C07": "P1_ICU"}
+BURST_IDLE = ("C09", "C10")
 
 
 def test_burst_mode_b_completes_safely():
     """폭주에도 모드 B는 교착 없이 완주하고 안전망 위반이 없어야 한다."""
-    eng = build_custom("B", BURST_DEFS, BURST_STANDBY, convoy=CONVOY_ROUTES)
+    eng = build_custom("B", BURST_DEFS, BURST_STANDBY, convoy=CONVOY_ROUTES,
+                       idle=BURST_IDLE)
     eng, v = _run_checked(eng)
     assert not v, v[:5]
     arr = {o.oid: o.arrive_t for o in eng.orders.values()}
@@ -62,30 +66,29 @@ def test_burst_mode_b_completes_safely():
     assert max(arr.values()) < 120
 
 
-GRIDLOCK_DEFS = [  # v3.3 최종 좌표에서 A를 확정 교착시키는 간섭 구성 (P3 발령 24s, 스캔 검증)
-    ("O-1", 3, "P3_CSR", 24.0, ["C05"], 0.7),
-    ("O-2", 2, "P2_ICU", 1.0, ["C06"], None),
-    ("O-3", 1, "P1_ICU", 2.0, ["C07"], None),
-    ("O-4", 0, None, 8.0, ["C01", "C02", "C03", "C04"], None),
-]
-
-
-def test_gridlock_mode_a_detected_mode_b_survives():
-    """[발표 논거] 같은 간섭 구성에서 모드 A(FCFS)는 정면 그리드락 —
-    선점 없이는 양방향 단선에서 회피 불가능함을 증명하는 음성 테스트.
-    관제는 20초 무진행 시 DEADLOCK 이벤트로 대치 당사자까지 통보하고,
-    모드 B는 동일 구성을 대피 기동으로 완주한다."""
-    eng = build_custom("A", GRIDLOCK_DEFS, BURST_STANDBY, convoy=CONVOY_ROUTES)
-    for _ in range(int(120 * 30)):
-        eng.tick()
-        if any(e[1] == "DEADLOCK" for e in eng.events):
-            break
-    dl = [e for e in eng.events if e[1] == "DEADLOCK"]
-    assert dl, "그리드락 미감지"
-    assert "C05" in dl[0][3] and "C01" in dl[0][3]   # 대치 당사자 포함 통보
-    eng_b = build_custom("B", GRIDLOCK_DEFS, BURST_STANDBY, convoy=CONVOY_ROUTES)
-    eng_b, v = _run_checked(eng_b)
-    assert not v, v[:5]
+def test_meet_pass_off_deadlocks_on_resolves():
+    """[발표 3부] 교행 규칙(R13)을 끄면 공급(O-1)·회수(O-5)가 동측 가지에서 정면 교착 —
+    선점(모드 B)으로도 못 푼다(파도 밖 P3끼리의 대치라 선점이 개입할 여지가 없음).
+    관제는 무진행 20초를 DEADLOCK 으로 감지·통보한다.
+    R13 을 켜면 동일 구성이 양 모드 모두 완주 —
+    "교착은 스케줄링이 아니라 교통 규칙 계층이 푼다"의 음성/양성 대조."""
+    import importlib
+    from rail_control_core import scenario as S
+    for mode in ("A", "B"):
+        importlib.reload(S)
+        S.PARAMS["meet_pass_enabled"] = False
+        eng = S.build(mode)
+        try:
+            eng.run(until=140)
+            assert False, f"{mode}: R13 OFF 인데 완주"
+        except RuntimeError:
+            pass
+        dl = [x for x in eng.events if x[1] == "DEADLOCK"]
+        assert dl and "C05" in dl[0][3] and "C08" in dl[0][3], f"{mode}: 감지 실패"
+    importlib.reload(S)                      # 토글 원복 (기본 True)
+    eng = S.build("A")
+    eng.run(until=170)                       # ON: 양 모드 완주 — A 로 대표 확인
+    assert all(o.state.value == "DONE" for o in eng.orders.values())
 
 
 # ── ② EVAC_SPUR 강제: 2F->B1F 역방향 배송이 콘보이와 본선 대향 ──────
@@ -139,14 +142,15 @@ def test_code_crimson_timing():
 # ── ④ 폭주 시 도착 순서 결정론 ───────────────────────────────────────
 def test_burst_determinism():
     def arr():
-        eng = build_custom("B", BURST_DEFS, BURST_STANDBY, convoy=CONVOY_ROUTES)
+        eng = build_custom("B", BURST_DEFS, BURST_STANDBY, convoy=CONVOY_ROUTES,
+                           idle=BURST_IDLE)
         eng, _ = _run_checked(eng)
         return {o.oid: round(o.arrive_t, 2) for o in eng.orders.values()}
     assert arr() == arr()
 
 
 if __name__ == "__main__":
-    for fn in [test_burst_mode_b_completes_safely, test_gridlock_mode_a_detected_mode_b_survives,
+    for fn in [test_burst_mode_b_completes_safely, test_meet_pass_off_deadlocks_on_resolves,
                test_evac_spur_forced, test_code_crimson_timing, test_burst_determinism]:
         fn()
         print(f"PASS {fn.__name__}")

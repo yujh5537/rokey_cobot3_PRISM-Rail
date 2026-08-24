@@ -54,11 +54,11 @@
 ## 2. /capsule_cmd — **폐기**
 
 `kind=="capsule_state"` 정보는 pose의 `state` 필드로, `kind=="preempt"` 연출 정보는
-`/order_event` 의 `event ∈ {YIELD, EVAC_LANE, EVAC_SPUR, FINISH_ALLOWED, RESUME}` 로 대체됩니다.
+`/order_event` 의 `event ∈ {YIELD, EVAC_LANE, EVAC_SPUR, MEET_PASS, FINISH_ALLOWED, RESUME}` 로 대체됩니다.
 
 | 기존 preempt JSON | 새 OrderEvent 대응 |
 |---|---|
-| `action: "EVACUATE"` | `event: "EVAC_LANE"` (레인) 또는 `"EVAC_SPUR"` (지선) |
+| `action: "EVACUATE"` | `event: "EVAC_LANE"` (레인) / `"EVAC_SPUR"` (지선) / `"MEET_PASS"` (교행 치환) |
 | `by: "CR-1"` | 선점 주체는 항상 P0 — `detail` 에 맥락 포함 |
 | `target`, `block`, `siding` | `subject` = 대피한 캡슐 id, `detail` = `"B2-05->B2-04b"` 형식 |
 
@@ -98,14 +98,31 @@ ros2 service call /sim_start std_srvs/srv/Trigger
 ## 5. mock 노드 수정 요약
 
 - **mock_sim**: `/capsule_pose` 발행 코드 → **구독**으로 변경 (코어→씬 단방향). 수신 xyz를 프림에 적용만.
-- **mock_core**: 발행 스키마를 위 msg 타입으로 교체, ID 를 C01/O-4 체계로. 시연 4장면 이벤트는
-  실제 코어가 내는 이름(YIELD, FINISH_ALLOWED, **EVAC_SPUR**, RESUME, RTA_ENGAGED, SIM_DONE)과 동일하게.
+- **mock_core**: 발행 스키마를 위 msg 타입으로 교체, ID 를 C01/O-4 체계로. 시연 5장면 이벤트는
+  실제 코어가 내는 이름(YIELD, FINISH_ALLOWED, **EVAC_LANE**, **MEET_PASS**, RESUME, RTA_ENGAGED, SIM_DONE)과 동일하게.
   ⚠️ v3.5 기준 mock 타임라인 수치도 실코어와 맞춰 두었습니다(ORDER_ARRIVE t=67.07 / SIM_DONE 85.77,
   콘보이 도착부 B2-09=OR2) — 플랜 B로 전환해도 심사 화면 수치가 달라지지 않게 하기 위함입니다.
 - 검증: 실코어 노드를 켜고 `ros2 topic echo /capsule_pose` 값과 mock 처리 결과가 같은 프림 위치를
   만드는지 1회 대조하면 끝.
 
-## 6. ⚠️ `/block_state.capacity` 의미 변경 (v3.5 — UI 필독)
+## 6. ⚠️ v3.6 변경 — `MEET_PASS` 이벤트 + 화물 라벨 (UI 필독)
+
+**이벤트 어휘 추가** (스키마·키 불변 — `/order_event` 의 `event` 값만 늘어남):
+
+| 이벤트 | 의미 | UI 처리 제안 |
+|---|---|---|
+| `MEET_PASS` | 교행(R13) — 대향 캡슐과 스쳐 지나가려 쌍둥이 레인으로 치환. `detail` = `"B2-07a->B2-07b"` | 대피(`EVAC_*`)와 같은 계열로 표시하되 색을 달리하면 좋습니다(대피=양보, 교행=상호 통과). 시연 t=26.1 하이라이트 대상 |
+
+**화물 라벨 변경** — O-1 의 방향이 뒤집히고 짝 오더가 생겼습니다:
+
+| 오더 | 구 라벨 | v3.6 라벨 |
+|---|---|---|
+| O-1 | 오염 기구 회수 | **멸균 물품 공급** (ST-CSR → ST-OR1) |
+| **O-5** | — (신설) | **사용 기구 회수** (ST-OR1 → ST-CSR) |
+
+캡슐 선배치도 바뀝니다: **C05@ST-CSR / C08@ST-OR1**, 디포 유휴는 **C09·C10 두 대만**입니다.
+
+## 7. ⚠️ `/block_state.capacity` 의미 변경 (v3.5 — UI 필독)
 
 Code Crimson 활성 중에는 **콘보이가 점유한 블록의 `capacity` 가 개방분(=4)으로 발행**됩니다
 (R9 개정 — 콘보이 한정 블록 점유 상한 개방). 즉 `capacity` 는 이제 고정 상수가 아니라
@@ -122,7 +139,7 @@ Code Crimson 활성 중에는 **콘보이가 점유한 블록의 `capacity` 가 
   — 그러지 않으면 콘보이 통과 구간에서 4/1 처럼 100% 초과 표시가 납니다.
 - 정본: [`interface_schema.json`](../src/rail_bridge/rail_bridge/interface_schema.json) `/block_state.fields.capacity`
 
-## 7. 좌표 규칙 (참고)
+## 8. 좌표 규칙 (참고)
 
 - Z: B1F 레일 4.0 / 2F 레일 13.0, 샤프트는 z 보간 (SB-UP x=-7.25, SB-DN x=-6.75)
 - L자 블록: BB-08 경유점 (6.5, 5.0) / BB-09 경유점 (3.2, -4.0)

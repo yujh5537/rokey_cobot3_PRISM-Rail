@@ -336,7 +336,10 @@ class Engine:
         c.req_t = float("inf")
 
     def _try_evacuate(self, c: Capsule, next_bid: str, next_fwd: bool, locked: set[str]) -> bool:
-        """R3: 다음 블록이 선점 잠금이고 내가 잠금 경로 위에 있으면 대피 시도."""
+        """R3 확장(v3.6): 파도 경로 위 캡슐의 대피 —
+        (a) 역방향 조우: 정면 회피 (기존)
+        (b) 동방향인데 파도보다 느림: 대피 레인에 비켜서 콘보이 추월 허용 (신규)
+        저속 캡슐을 플러시하면 콘보이가 그 속도에 갇히므로, 추월 대기가 정답."""
         if c.block not in locked:
             return False
         # 상위 활성 오더들의 목적지(최종 블록)는 대피지에서 제외
@@ -460,9 +463,10 @@ class Engine:
                 continue
             prio = c.order.prio if c.order else 9
             # R3 우선: 잠금 경로 위에 있고 다음도 잠금이면 대피 시도 (실패 시 R4 플러시)
+            slower_than_wave = self.speed(nbid, c) < self.p["v_max"] - 1e-6
             if self.mode == "B" and prio > 0 and nbid in locked \
                and self.on_wave(c, locked) and c.state != CapsuleState.EVACUATED \
-               and self._wave_opposes(nbid, nfwd):
+               and (self._wave_opposes(nbid, nfwd) or slower_than_wave):
                 if self._try_evacuate(c, nbid, nfwd, locked):
                     nbid2, nfwd2 = c.route[c.idx + 1]
                     ok2, _ = self.can_enter(c, nbid2, nfwd2, locked, ignore_prio=True)
@@ -473,6 +477,24 @@ class Engine:
                         c.detour = nbid2
                     continue
             ok, reason = self.can_enter(c, nbid, nfwd, locked)
+            # R13(v3.6) 교행(meet/pass): 정면 대치로 막혔고 원하는 블록에 대피 레인 쌍이
+            # 있으면 그 레인으로 치환해 교행한다. 파도 대피와 동일 기계, 양 모드 공통
+            # (회랑 토큰처럼 교통 안전 계층 — 양방향 단선+교행 루프의 필수 규칙).
+            # 주의: 용량 1 블록은 대향 점유 시 reason이 "capacity"로 먼저 잡히므로
+            # 사유 문자열이 아니라 '대향 점유자 존재'를 직접 검사한다 (v3.6 버그 수정).
+            if not ok and self.p.get("meet_pass_enabled", True) \
+               and reason in ("headon", "capacity") \
+               and any(x.fwd != nfwd for x in self.occ[nbid]):
+                twin = T.ESCAPE_LANE.get(nbid)
+                if twin:
+                    ok2, _ = self.can_enter(c, twin, nfwd, locked, ignore_prio=True)
+                    if ok2:
+                        c.route[c.idx + 1] = (twin, nfwd)
+                        self.log("MEET_PASS", c.cid, f"{nbid}->{twin}")
+                        c.idx += 1
+                        self._do_enter(c, twin, nfwd)
+                        c.state = CapsuleState.MOVING
+                        continue
             if ok:
                 if c.state in (CapsuleState.YIELD_WAIT, CapsuleState.EVACUATED):
                     self.log("RESUME", c.cid, nbid)

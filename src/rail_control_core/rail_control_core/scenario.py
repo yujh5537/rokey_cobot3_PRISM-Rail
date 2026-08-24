@@ -17,6 +17,7 @@ PARAMS = {
     "rta_margin": 0.4,
     # R9 개정(v3.5): Code Crimson 활성 중 콘보이 캡슐에 한해 블록 점유 상한 개방
     "convoy_bunch_cap": 4,
+    "meet_pass_enabled": True,   # R13 교행 (3부 대조 시연용 토글)
     "pitch": 0.9,
     "yield_window_sec": 15.0,
     "unload_sec": 2.0,
@@ -28,11 +29,14 @@ PARAMS = {
 
 # 오더: (id, prio, route, release_t, capsule_ids)
 # (id, prio, route, release_t, capsules, speed_cap)
+# v3.6: 공급/회수 짝 흐름 — O-1 멸균 공급(CSR->OR1)은 회수와 교차하지 않는 후속 슬롯,
+#       O-5 사용 기구 회수(OR1->CSR)가 역방향 배우로서 대피·교행 장면 담당
 ORDER_DEFS = [
-    ("O-1", 3, "P3_CSR", 14.0, ["C05"], 0.7),   # 오염 기구: 저속 운송 규정 0.7m/s
+    ("O-1", 3, "P3_OR1", 2.0, ["C05"], 0.7),   # 멸균 물품 공급 CSR->OR1 (적재 안정 저속)
     ("O-2", 2, "P2_ICU", 1.0, ["C06"], None),
     ("O-3", 1, "P1_ICU", 2.0, ["C07"], None),
     ("O-4", 0, None, 8.0, ["C01", "C02", "C03", "C04"], None),  # Code Crimson 콘보이
+    ("O-5", 3, "P3_CSR", 17.0, ["C08"], 0.7),   # 사용 기구 회수 OR1->CSR (역방향)
 ]
 # v3.5: Code Crimson 콘보이는 OR2 단일 집결 (구 OR1/OR2 분산 폐기 — A 결정 2026-08-24)
 CONVOY_ROUTES = {"C01": "P0_OR2", "C02": "P0_OR2", "C03": "P0_OR2", "C04": "P0_OR2"}
@@ -44,7 +48,7 @@ def build(mode: str) -> Engine:
         due = rel + PARAMS["priority_due_sec"][prio]
         eng.orders[oid] = Order(oid, prio, route or "convoy", rel, due, cids, speed=spd)
     # 선배치 캡슐 (출발 스테이션 대기)
-    standby = {"C05": "P3_CSR", "C06": "P2_ICU", "C07": "P1_ICU"}
+    standby = {"C05": "P3_OR1", "C06": "P2_ICU", "C07": "P1_ICU", "C08": "P3_CSR"}
     for cid, rname in standby.items():
         oid = next(o for o, _, r, _, cs, _ in ORDER_DEFS if cid in cs)
         c = Capsule(cid, eng.orders[oid], list(T.ROUTES[rname]),
@@ -62,8 +66,8 @@ def build(mode: str) -> Engine:
         c.block, c.fwd, c.pos = "BB-08", True, L - i * PARAMS["pitch"]
         eng.capsules[cid] = c
         eng.occ["BB-08"].append(c)
-    # 디포 유휴 3대 (점유만)
-    for cid in ["C08", "C09", "C10"]:
+    # 디포 유휴 2대 (점유만) — v3.6: C08 은 ST-OR1 선배치로 이동
+    for cid in ["C09", "C10"]:
         c = Capsule(cid, None, [], state=CapsuleState.DOCKED)
         c.block = "BB-07"
         eng.capsules[cid] = c
@@ -79,7 +83,8 @@ def run(mode: str, verbose: bool = False) -> dict:
         for t, ev, subj, d in eng.events:
             print(f"  t={t:6.2f}  {ev:14s} {subj:5s} {d}")
     result["scene_events"] = sorted({ev for _, ev, _, _ in eng.events}
-                                    & {"YIELD", "EVAC_LANE", "EVAC_SPUR", "FINISH_ALLOWED"})
+                                    & {"YIELD", "EVAC_LANE", "EVAC_SPUR", "FINISH_ALLOWED",
+                                       "MEET_PASS", "RTA_ENGAGED", "PRIORITY_PROMOTED"})
     return result
 
 

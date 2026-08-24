@@ -117,13 +117,13 @@ python3 -m pytest test/ -v
 
 **로직을 고칠 때마다 반드시 돌리세요.** 0.3초면 끝나고, ROS 를 띄울 필요가 없습니다.
 
-검사 항목 (24개):
+검사 항목 (25개):
 
 | 파일 | 개수 | 내용 |
 |---|---|---|
-| `test_regression.py` | 12 | §6-2 회귀 기준값(모드 A 71.20 / 모드 B P0 67.07), RTA 회복·등급 승격, R8 안전망 불변식, 블록 중복 점유 없음, 전 오더 완료(교착 방지), `/block_state` 페이로드 스키마 |
+| `test_regression.py` | 13 | §6-2 회귀 기준값(모드 A 71.17 / 모드 B P0 67.07), 5장면 발생(교행 포함), RTA 회복·등급 승격, R8 안전망 불변식, 블록 중복 점유 없음, 전 오더 완료(교착 방지), `/block_state` 페이로드 스키마, **mock_core 타임라인 드리프트** |
 | `test_bridge.py` | 7 | 제어 명령(start/pause/reset/mode/status), 페이로드 스키마, 변화 시에만 발행, Code Crimson 즉시 발동·중복 거부, SIM_DONE 기준값(=`BASE_B`), 모드 전환 리셋, 좌표 반올림 불변식 |
-| `test_edge_cases.py` | 5 | 오더 폭주 완주·안전망, **모드 A 그리드락 재현 + DEADLOCK 감지**, EVAC_SPUR 강제(역방향 배송 vs 콘보이), Code Crimson 발동 타이밍 3종, 폭주 결정론 |
+| `test_edge_cases.py` | 5 | 5오더 폭주 완주·안전망, **R13 교행 OFF/ON 대조(OFF 시 양 모드 교착 + 감지 / ON 시 완주)**, EVAC_SPUR 강제(역방향 배송 vs 콘보이), Code Crimson 발동 타이밍 3종, 폭주 결정론 |
 
 통합 중 문제가 생기면 **이 테스트 통과 여부로 책임을 가릅니다.**
 통과하면 관제 로직은 정상이고, 문제는 ROS 경계(빌드·QoS·네트워크)에 있습니다.
@@ -147,7 +147,7 @@ rail_control_core/
 ├── launch/control_core.launch.py
 ├── test/test_regression.py   ← §6-2 회귀 기준값 고정
 ├── test/test_bridge.py       ← 노드 로직 (ROS 없이)
-├── test/test_edge_cases.py   ← 폭주·그리드락·EVAC_SPUR 엣지케이스
+├── test/test_edge_cases.py   ← 폭주·교행(R13) OFF/ON·EVAC_SPUR 엣지케이스
 └── tools/kpi_report.py       ← 모드 A/B 비교표 출력 (발표용)
 ```
 
@@ -182,7 +182,7 @@ python3 -m pytest test/ -q
 `test_bridge.py` 는 기준값을 `test_regression.py` 에서 읽어오므로 따로 고칠 필요가 없습니다.
 
 단, **4가지 시연 장면이 모두 재현되는지** 반드시 함께 확인하세요
-(`kpi_report.py` 출력의 `발생 장면` 줄 — YIELD / EVAC_LANE / FINISH_ALLOWED).
+(`kpi_report.py` 출력의 `발생 장면` 줄 — v3.6 기준 YIELD / EVAC_LANE / FINISH_ALLOWED / MEET_PASS / RTA_ENGAGED).
 숫자만 맞추다 보면 대피 장면이 사라지는 일이 실제로 발생합니다.
 
 ### 미결 3건 (B 담당자 회신 대기 — 진행 비차단)

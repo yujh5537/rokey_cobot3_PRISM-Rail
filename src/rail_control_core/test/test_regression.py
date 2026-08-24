@@ -10,10 +10,11 @@ from rail_control_core.scenario import run
 
 TOL = 0.2  # 허용 오차(초): 30Hz 틱 양자화 감안
 
-# ── 기준값 (2026-08-24, v3.5: 콘보이 OR2 집결 + CC 블록 용량 개방[R9 개정]) ──
-# 발령 P2=1,P1=2,P0=8,P3=14 / due(시연) P0=30,P1=40,P2=77,P3=130 / 속도 평시1.0·최대2.0·샤프트0.5·곡선0.5
-BASE_A = {"makespan": 71.20, "O-1": 47.27, "O-2": 52.37, "O-3": 37.60, "O-4": 71.20}
-BASE_B = {"makespan": 85.77, "O-1": 85.77, "O-2": 76.60, "O-3": 37.60, "O-4": 67.07}
+# ── 기준값 (2026-08-24, v3.6: O-1 멸균 공급 역전 + O-5 회수 추가 + R13 교행) ──
+# 발령 O-1(공급 CSR->OR1)=2, O-2=1, O-3=2, O-4(P0)=8, O-5(회수 OR1->CSR)=17
+# due(시연) P0=30,P1=40,P2=77(abs 78),P3=130 / 속도 평시1.0·최대2.0·샤프트0.5·곡선0.5
+BASE_A = {"makespan": 71.17, "O-1": 36.17, "O-2": 48.43, "O-3": 37.60, "O-4": 71.17, "O-5": 54.77}
+BASE_B = {"makespan": 85.77, "O-1": 36.17, "O-2": 76.60, "O-3": 37.60, "O-4": 67.07, "O-5": 85.77}
 
 
 def _close(a, b):
@@ -39,12 +40,12 @@ def test_mode_b_baseline():
 
 
 def test_mode_b_scenes_present():
-    """발표 4장면 중 3장면이 시연 시나리오에서 실제 발생하는지.
-    v3.3 물리(속도 하향·샤프트 0.5)에서 장면 ③은 EVAC_SPUR 형태로 발생 —
-    후진 진입이지만 들어가는 곳은 동일한 대피 레인(B2-04b)이라 시연 서사 불변.
-    (EVAC_LANE 치환형은 모드 A 무교착 조건과 양립하는 발령 시각이 없음을 스캔으로 확인)"""
+    """발표 장면이 시연 시나리오에서 실제 발생하는지 (v3.6 = 5장면).
+    역방향 배우(O-5 회수)가 콘보이와 정면 조우하면서 장면 ③이 대피 레인 치환
+    (EVAC_LANE)으로 복귀했고, 공급(O-1)과 회수(O-5)가 동측 가지에서 스쳐 지나가는
+    신규 장면 ⑤ 교행(MEET_PASS, R13)이 추가됐다."""
     r = run("B")
-    assert {"YIELD", "EVAC_SPUR", "FINISH_ALLOWED"} <= set(r["scene_events"])
+    assert {"YIELD", "EVAC_LANE", "FINISH_ALLOWED", "MEET_PASS"} <= set(r["scene_events"])
 
 
 def test_pedd_effect():
@@ -53,10 +54,37 @@ def test_pedd_effect():
     a, b = run("A"), run("B")
     assert b["orders"]["O-4"]["arrive"] < a["orders"]["O-4"]["arrive"]  # P0 혈액
     assert b["orders"]["O-3"]["arrive"] <= a["orders"]["O-3"]["arrive"]  # P1 응급약품
-    # 모드 B 도착 순서 = 우선순위 순 (P1 < P2 < P3; P0는 4대 콘보이 특성상 P2와 근접 도착)
+    # 모드 B: 간섭을 겪은 오더들 사이에서 우선순위가 지연을 배분한다 (P1 < P2 < P3 회수).
+    # O-1 공급은 콘보이와 동방향이라 무간섭 조기 완주(36.2s) — 순서 비교 대상이 아니다.
+    # "선점은 필요할 때만 개입한다"가 이 예외의 의미이며, 결함이 아니다.
     ob = b["orders"]
-    assert ob["O-3"]["arrive"] < ob["O-2"]["arrive"] < ob["O-1"]["arrive"]
+    assert ob["O-3"]["arrive"] < ob["O-2"]["arrive"] < ob["O-5"]["arrive"]
 
+
+
+def test_mock_core_timeline_matches_baseline():
+    """mock_core 의 재생 타임라인 수치가 회귀 기준값과 어긋나지 않는지.
+
+    mock_core 는 관제 노드가 죽었을 때의 플랜 B 라서, 수치가 낡으면 장애 상황에서
+    심사 화면에 옛 값이 뜬다 (v3.3->v3.5 구간에 실제로 두 번 어긋났다).
+    rclpy 를 임포트하지 않고 AST 로 TIMELINE 리터럴만 읽어 대조한다.
+    """
+    import ast
+    path = os.path.join(os.path.dirname(__file__), "..", "..",
+                        "rail_bridge", "rail_bridge", "mock_core_node.py")
+    if not os.path.exists(path):
+        return                                   # 브릿지 패키지 없이 코어만 쓰는 배포
+    tree = ast.parse(open(path, encoding="utf-8").read(), filename=path)
+    tl = next((ast.literal_eval(n.value) for n in tree.body
+               if isinstance(n, ast.Assign)
+               and any(getattr(t, "id", "") == "TIMELINE" for t in n.targets)), None)
+    assert tl, "mock_core_node.py 에서 TIMELINE 을 찾지 못했습니다"
+    detail = {ev: d for ev, _, d, *_ in tl}
+    assert "MEET_PASS" in detail, "v3.6 교행 장면이 mock 타임라인에 없습니다"
+    for ev, key in (("ORDER_ARRIVE", "O-4"), ("SIM_DONE", "makespan")):
+        got = float(detail[ev].split("=")[1])
+        assert abs(got - BASE_B[key]) <= TOL, \
+            f"mock {ev}={got} != BASE_B[{key}]={BASE_B[key]} — mock_core 타임라인을 갱신하세요"
 
 
 def _eff_cap(occ, cap, bunch=4):
