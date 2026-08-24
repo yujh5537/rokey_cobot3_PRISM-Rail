@@ -1,6 +1,7 @@
 """
 kpi_report.py — 모드 A/B 비교표를 뽑아 명세서 §6-2 회귀 기준값과 대조하고,
-명세서 §3 블록 표가 topology.py 에서 재생성한 결과와 일치하는지 검사합니다.
+명세서 §3 블록 표가 topology.py 에서 재생성한 결과와 일치하는지, 그리고
+config/params.yaml 의 engine 블록이 scenario.PARAMS 와 같은지 검사합니다.
 
 기준 KPI 는 토폴로지 v3.1 §6-2 에서 'P0 혈액 도착 시각'으로 동결되었습니다.
 이 도구는 그 표를 그대로 재생성하고, 현재 코드가 기준값에서 벗어났는지 표시합니다.
@@ -66,6 +67,42 @@ def _check_spec_section3() -> bool:
             current.split("\n"), regen.split("\n"),
             fromfile="docs/topology_spec.md §3", tofile="재생성", lineterm=""))[:20]:
         print("   " + line)
+    return False
+
+
+def _check_params_yaml() -> bool:
+    """config/params.yaml 의 engine 블록이 scenario.PARAMS 와 같은지 검사.
+
+    노드는 기동 시 이 yaml 로 scenario.PARAMS 를 덮어씁니다. 그래서 한쪽만 고치면
+    **테스트는 통과하는데 ROS 시연에서만 옛 값이 쓰이는** 상태가 됩니다 — 테스트가
+    거짓 안심을 주는 부류라 여기서 구조적으로 막습니다 (§3 표 검사와 같은 취지).
+    v3.5 에서 실제로 priority_due_sec[2] 가 85 로 남아 있었습니다.
+    반환 False = 불일치 (호출자가 exit 1).
+    """
+    path = ROOT / "config" / "params.yaml"
+    if not path.exists():
+        print(f"params.yaml 검사 건너뜀 — {path} 없음")
+        return True
+    try:
+        import yaml
+    except ImportError:
+        print("params.yaml 검사 건너뜀 — pyyaml 미설치 (pip3 install pyyaml)")
+        return True
+    from rail_control_core.scenario import PARAMS
+
+    eng = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("engine") or {}
+    unknown = sorted(set(eng) - set(PARAMS))
+    diff = [(k, eng[k], PARAMS[k]) for k in eng if k in PARAMS and eng[k] != PARAMS[k]]
+    if not diff and not unknown:
+        print(f"params.yaml: ✅ scenario.PARAMS 와 일치 ({len(eng)}키, 런타임 오버라이드 안전)")
+        return True
+
+    print("⚠️ config/params.yaml 이 scenario.PARAMS 와 다릅니다 — 노드 기동 시 yaml 이 이깁니다.")
+    print("   (테스트는 통과하지만 ROS 시연에서만 옛 값이 쓰이는 상태입니다)")
+    for k, yv, pv in diff:
+        print(f"   {k}: params.yaml={yv!r} vs scenario.PARAMS={pv!r}")
+    for k in unknown:
+        print(f"   {k}: params.yaml 에만 있는 키 — 엔진이 무시합니다 (오타 의심)")
     return False
 
 
@@ -158,13 +195,14 @@ def main() -> None:
     print("  · 그래서 §6-2 의 헤드라인 지표는 P0 도착 시각입니다.")
     print()
     spec_ok = _check_spec_section3()
+    params_ok = _check_params_yaml()
 
     if drift:
         print()
         print("⚠️ 기준값 이탈 — 명세서 §6-2 와 test/test_regression.py 를 함께 갱신하세요:")
         for oid, va, ea, vb, eb in drift:
             print(f"   {oid}: A {va} (기준 {ea}) / B {vb} (기준 {eb})")
-    if drift or not spec_ok:
+    if drift or not spec_ok or not params_ok:
         sys.exit(1)
 
 

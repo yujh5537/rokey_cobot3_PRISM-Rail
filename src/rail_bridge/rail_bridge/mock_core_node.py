@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """mock_core — 관제 코어 대역. 실코어 없이 씬(B)·UI(D) 를 단독으로 붙여볼 때 씁니다.
 
-관제 코어 v3.2 규격(docs/C연동_매핑표.md)으로 발행합니다:
+관제 코어 v3.5 규격(docs/C연동_매핑표.md)으로 발행합니다:
   /capsule_pose  BEST_EFFORT depth1  30Hz  캡슐 위치 + 씬 월드 xyz
   /order_event   RELIABLE   depth50        오더·선점·대피 이벤트
   /block_state   RELIABLE + TRANSIENT_LOCAL depth1  변화 시에만
@@ -36,10 +36,10 @@ TIMELINE = [
     ("ORDER_RELEASE",  "O-4", "P0",              "C01", "BB-09",  (6.5, -4.0, 4.0),  "MOVING"),
     ("YIELD",          "C06", "BB-01:locked",    "C06", "SP-INJ", (-4.5, -2.0, 4.0), "YIELD_WAIT"),
     ("FINISH_ALLOWED", "C07", "SB-UP",           "C07", "SB-UP",  (-7.25, -5.0, 8.5), "FINISHING"),
-    ("EVAC_LANE",      "C05", "B2-05->B2-04b",   "C05", "B2-04b", (-0.7, -1.4, 13.0), "EVACUATED"),
+    ("EVAC_SPUR",      "C05", "B2-04a->B2-04b",  "C05", "B2-04b", (-0.7, -1.4, 13.0), "EVACUATED"),
     ("RESUME",         "C05", "B2-04a",          "C05", "B2-04a", (1.0, -2.0, 13.0), "MOVING"),
-    ("ORDER_ARRIVE",   "O-4", "t=47.60",         "C01", "B2-08",  (4.5, 5.0, 13.0),  "UNLOADING"),
-    ("SIM_DONE",       "sim", "makespan=64.23",  "C01", "",       (0.0, 0.0, 0.0),   "REMOVED"),
+    ("ORDER_ARRIVE",   "O-4", "t=67.07",         "C01", "B2-09",  (4.5, -0.8, 13.0), "UNLOADING"),
+    ("SIM_DONE",       "sim", "makespan=85.77",  "C01", "",       (0.0, 0.0, 0.0),   "REMOVED"),
 ]
 
 REASON = {

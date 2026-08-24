@@ -15,13 +15,15 @@ PARAMS = {
     # RTA 슬랙 회복 (R11) / 자동 승격 (R12)
     "rta_slack_threshold": 10.0,
     "rta_margin": 0.4,
+    # R9 개정(v3.5): Code Crimson 활성 중 콘보이 캡슐에 한해 블록 점유 상한 개방
+    "convoy_bunch_cap": 4,
     "pitch": 0.9,
     "yield_window_sec": 15.0,
     "unload_sec": 2.0,
     "stall_timeout_sec": 20.0,
         # 시연 스케일 due (A2 확정): 선점 지연이 슬랙을 실제로 위협하는 값.
     # 실세계 값(P1 180 / P2 600 / P3 1800)은 명세서 §6-1 비고에 병기.
-    "priority_due_sec": {0: 30, 1: 40, 2: 85, 3: 130},
+    "priority_due_sec": {0: 30, 1: 40, 2: 77, 3: 130},
 }
 
 # 오더: (id, prio, route, release_t, capsule_ids)
@@ -32,7 +34,8 @@ ORDER_DEFS = [
     ("O-3", 1, "P1_ICU", 2.0, ["C07"], None),
     ("O-4", 0, None, 8.0, ["C01", "C02", "C03", "C04"], None),  # Code Crimson 콘보이
 ]
-CONVOY_ROUTES = {"C01": "P0_OR1", "C02": "P0_OR1", "C03": "P0_OR2", "C04": "P0_OR2"}
+# v3.5: Code Crimson 콘보이는 OR2 단일 집결 (구 OR1/OR2 분산 폐기 — A 결정 2026-08-24)
+CONVOY_ROUTES = {"C01": "P0_OR2", "C02": "P0_OR2", "C03": "P0_OR2", "C04": "P0_OR2"}
 
 
 def build(mode: str) -> Engine:

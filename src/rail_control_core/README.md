@@ -65,7 +65,7 @@ ros2 topic echo /block_state --once --qos-durability transient_local --qos-relia
                                      # 기대: 블록 30개 스냅샷 (늦게 켜도 마지막 상태 즉시 수신)
 ```
 
-모드 B 완주 시 `[SIM_DONE] sim makespan=94.47` 로그가 나오면
+모드 B 완주 시 `[SIM_DONE] sim makespan=85.77` 로그가 나오면
 관제 코어–ROS 경계까지 전부 정상입니다.
 
 ### 시연 조작 (전부 `std_srvs/srv/Trigger`)
@@ -121,7 +121,7 @@ python3 -m pytest test/ -v
 
 | 파일 | 개수 | 내용 |
 |---|---|---|
-| `test_regression.py` | 12 | §6-2 회귀 기준값(모드 A 73.70 / 모드 B P0 71.07), RTA 회복·등급 승격, R8 안전망 불변식, 블록 중복 점유 없음, 전 오더 완료(교착 방지), `/block_state` 페이로드 스키마 |
+| `test_regression.py` | 12 | §6-2 회귀 기준값(모드 A 71.20 / 모드 B P0 67.07), RTA 회복·등급 승격, R8 안전망 불변식, 블록 중복 점유 없음, 전 오더 완료(교착 방지), `/block_state` 페이로드 스키마 |
 | `test_bridge.py` | 7 | 제어 명령(start/pause/reset/mode/status), 페이로드 스키마, 변화 시에만 발행, Code Crimson 즉시 발동·중복 거부, SIM_DONE 기준값(=`BASE_B`), 모드 전환 리셋, 좌표 반올림 불변식 |
 | `test_edge_cases.py` | 5 | 오더 폭주 완주·안전망, **모드 A 그리드락 재현 + DEADLOCK 감지**, EVAC_SPUR 강제(역방향 배송 vs 콘보이), Code Crimson 발동 타이밍 3종, 폭주 결정론 |
 

@@ -1,6 +1,7 @@
 {
   "_about": {
     "version": "v3.3-FROZEN-2026-08-23",
+    "semantics": "capacity = 유효 용량. Code Crimson 활성 중 콘보이가 점유한 블록은 정적 상한을 초과해 발행될 수 있음(convoy_bunch_cap=4), 2026-08-24. 키·타입 등 구조는 version 그대로 동결 — 값 의미만 확장.",
     "owner": "A(관제 코어)",
     "encoding": "모든 토픽 std_msgs/msg/String, data 는 UTF-8 JSON 문자열",
     "why_not_custom_msg": "커스텀 msg 는 4대 PC 전원 재빌드가 필요하고 rosbridge 로 D 에게 넘길 때 변환이 든다. 06c0783 에서 팀 합의로 rail_msgs 를 삭제하고 이 스키마로 동결했다. JSON 키 이름은 docs/C연동_매핑표.md 의 msg 필드명과 1:1 이다.",
@@ -21,6 +22,11 @@
       "2차 좌표 반영(노드 5개 이동, 블록 7개 길이 변경) + B1 루프 접점 N-L1=-1.5 / N-L2=2.5 확정, ST-OR2=(4.5,-0.8,13.0) 실측 확정.",
       "회귀 기준값 재측정: 모드 A 73.70 / 모드 B 94.47, P0 도착 73.70→71.07(-3.6%). 이전 51.70/47.60·46.90/41.47 은 전부 폐기.",
       "장면 ③ 은 EVAC_LANE 치환형이 새 물리에서 모드 A 무교착과 양립하지 않아 EVAC_SPUR(같은 B2-04b 레인 후진 진입)로 확정. 화면·서사는 동일."
+    ],
+    "v3_5_changes": [
+      "콘보이 목적지 OR1/OR2 분산 -> ST-OR2 단일 집결 (4대 전원, 지선에서 순차 도킹). msg 스키마 변경 없음.",
+      "R9 개정 — Code Crimson 활성 중 콘보이 캡슐에 한해 블록 점유 상한 개방(convoy_bunch_cap=4). /block_state 의 capacity 는 이제 '유효 용량'으로 발행되므로 UI 는 캐시하지 말고 매 수신값을 쓸 것 (키·구조는 그대로).",
+      "회귀 기준값 재측정: 모드 A 71.20 / 모드 B 85.77, P0 도착 71.20->67.07(-5.8%). P2 due 85->77(마감 abs 78). v3.3 의 73.70/94.47·71.07 은 폐기."
     ]
   },
   "topics": {
@@ -88,7 +94,7 @@
       ],
       "fields": {
         "subject": "오더 id(오더 이벤트) 또는 캡슐 id(캡슐 이벤트)",
-        "detail": "이벤트별 맥락. EVAC_* 는 \"B2-04a->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=94.47\", DEADLOCK 은 \"무진행 20s, 대기: C05@...\", RTA_ENGAGED 는 \"slack=3.8s v_cmd=1.05\"",
+        "detail": "이벤트별 맥락. EVAC_* 는 \"B2-04a->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=85.77\", DEADLOCK 은 \"무진행 20s, 대기: C05@...\", RTA_ENGAGED 는 \"slack=3.8s v_cmd=1.05\"",
         "reason": "선점 계열에만. 사람이 읽는 설명 (R2~R4 근거)",
         "by": "선점 계열에만. 선점을 유발한 P0 오더 id"
       },
@@ -147,7 +153,9 @@
         "state": "FREE | RESERVED | OCCUPIED",
         "locked": "P0 선점 파도(bow-wave)에 포함된 블록",
         "corridor": "소속 회랑 C1~C6, 없으면 \"\"",
-        "dir": "회랑 통행 방향 +1 정방향 / -1 역방향 / 0 없음"
+        "dir": "회랑 통행 방향 +1 정방향 / -1 역방향 / 0 없음",
+        "capacity": "유효 용량 — 정적 블록 용량이되, Code Crimson 활성 중 콘보이가 점유한 블록은 개방분(convoy_bunch_cap=4)으로 발행됨 (v3.5 R9 개정). UI 는 이 값을 캐시하지 말고 매 수신값을 그대로 사용할 것.",
+        "occupancy": "현재 점유 캡슐 수 — 색칠 기준은 occupancy/capacity 비율"
       },
       "example": {
         "sim_t": 12.4,
@@ -212,15 +220,15 @@
       },
       "rate": "완주 시 1회",
       "direction": "Core(A) -> UI(D)",
-      "description": "명세서 §6-2 회귀 기준값과 같은 형식의 요약. v3.3 기준 모드 B 는 makespan 94.47, P0 도착 71.07.",
+      "description": "명세서 §6-2 회귀 기준값과 같은 형식의 요약. v3.5 기준 모드 B 는 makespan 85.77, P0 도착 67.07.",
       "example": {
         "kind": "kpi",
         "mode": "B",
-        "makespan": 94.47,
+        "makespan": 85.77,
         "orders": {
           "O-4": {
             "priority": 0,
-            "arrive": 71.07,
+            "arrive": 67.07,
             "wait": 0.0
           }
         },

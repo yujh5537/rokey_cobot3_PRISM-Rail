@@ -7,7 +7,16 @@ from rail_control_core.scenario import build, build_custom, PARAMS
 from rail_control_core.fsm import OrderState, CapsuleState
 from rail_control_core import topology as T
 
-CONVOY_ROUTES = {"C01": "P0_OR1", "C02": "P0_OR1", "C03": "P0_OR2", "C04": "P0_OR2"}
+CONVOY_ROUTES = {"C01": "P0_OR2", "C02": "P0_OR2", "C03": "P0_OR2", "C04": "P0_OR2"}  # v3.5 OR2 집결
+
+
+def _eff_cap(occ, cap, bunch=4):
+    """R9 개정: 활성 P0(Code Crimson) 캡슐이 점유 중인 블록은 상한 개방분까지 정상."""
+    from rail_control_core.fsm import OrderState
+    if any(c.order is not None and c.order.prio == 0
+           and c.order.state == OrderState.EN_ROUTE for c in occ):
+        return max(cap, bunch)
+    return cap
 
 
 def _run_checked(eng, until=300.0):
@@ -19,7 +28,7 @@ def _run_checked(eng, until=300.0):
         if k % 2 == 0:
             for bid, (_, _, length, cap, oneway) in T.BLOCKS.items():
                 occ = eng.occ[bid]
-                if len(occ) > cap:
+                if len(occ) > _eff_cap(occ, cap):
                     violations.append(f"t={eng.t:.2f} {bid} 용량 {len(occ)}/{cap}")
                 if len({c.fwd for c in occ}) > 1:
                     violations.append(f"t={eng.t:.2f} {bid} 정면 대치")

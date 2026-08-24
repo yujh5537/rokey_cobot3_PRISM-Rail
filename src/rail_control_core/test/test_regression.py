@@ -10,10 +10,10 @@ from rail_control_core.scenario import run
 
 TOL = 0.2  # 허용 오차(초): 30Hz 틱 양자화 감안
 
-# ── 기준값 (2026-08-23 최종, v3.3 + B1 접점 -1.5/2.5 확정 + A1 속도 + RTA[R11]/승격[R12]) ──
-# 발령 P2=1,P1=2,P0=8,P3=14 / due(시연) P0=30,P1=40,P2=85,P3=130 / 속도 평시1.0·최대2.0·샤프트0.5·곡선0.5
-BASE_A = {"makespan": 73.70, "O-1": 47.27, "O-2": 52.37, "O-3": 37.60, "O-4": 73.70}
-BASE_B = {"makespan": 94.47, "O-1": 94.47, "O-2": 84.33, "O-3": 37.60, "O-4": 71.07}
+# ── 기준값 (2026-08-24, v3.5: 콘보이 OR2 집결 + CC 블록 용량 개방[R9 개정]) ──
+# 발령 P2=1,P1=2,P0=8,P3=14 / due(시연) P0=30,P1=40,P2=77,P3=130 / 속도 평시1.0·최대2.0·샤프트0.5·곡선0.5
+BASE_A = {"makespan": 71.20, "O-1": 47.27, "O-2": 52.37, "O-3": 37.60, "O-4": 71.20}
+BASE_B = {"makespan": 85.77, "O-1": 85.77, "O-2": 76.60, "O-3": 37.60, "O-4": 67.07}
 
 
 def _close(a, b):
@@ -59,6 +59,15 @@ def test_pedd_effect():
 
 
 
+def _eff_cap(occ, cap, bunch=4):
+    """R9 개정: 활성 P0(Code Crimson) 캡슐이 점유 중인 블록은 상한 개방분까지 정상."""
+    from rail_control_core.fsm import OrderState
+    if any(c.order is not None and c.order.prio == 0
+           and c.order.state == OrderState.EN_ROUTE for c in occ):
+        return max(cap, bunch)
+    return cap
+
+
 def _run_with_invariants(mode: str):
     """매 틱마다 R8 안전망 불변식을 검사하며 시나리오를 완주시킨다."""
     from rail_control_core.scenario import build
@@ -73,7 +82,7 @@ def _run_with_invariants(mode: str):
         eng.tick()
         for bid, (_, _, length, cap, oneway) in T.BLOCKS.items():
             occ = eng.occ[bid]
-            if len(occ) > cap:
+            if len(occ) > _eff_cap(occ, cap):
                 violations.append(f"t={eng.t:.2f} {bid} 용량 초과 {len(occ)}/{cap}")
             dirs = {c.fwd for c in occ}
             if len(dirs) > 1:

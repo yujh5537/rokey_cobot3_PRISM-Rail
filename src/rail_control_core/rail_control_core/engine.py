@@ -171,10 +171,14 @@ class Engine:
             else:
                 st = BlockState.FREE
             cor = T.BLOCK_TO_CORRIDOR.get(bid)
+            eff = cap
+            if any(x.order is not None and x.order.prio == 0
+                   and x.order.state == OrderState.EN_ROUTE for x in self.occ[bid]):
+                eff = max(cap, int(self.p.get("convoy_bunch_cap", 4)))
             snap[bid] = {
                 "state": st.value,
                 "occupancy": n,
-                "capacity": cap,
+                "capacity": eff,
                 "locked": bid in locked,
                 "corridor": cor,
                 "dir": self.corridor_dir[cor] if cor else 0,
@@ -207,13 +211,24 @@ class Engine:
         return cor is not None and any(T.BLOCK_TO_CORRIDOR.get(b) == cor for b in locked)
 
     # ---------- 진입 판정 ----------
+    def effective_cap(self, block_id: str, c: Capsule | None = None) -> int:
+        """R9 개정(v3.5): Code Crimson 활성 중에는 해당 콘보이 캡슐에 한해
+        블록 점유 상한을 convoy_bunch_cap(4)까지 개방한다. 물리 안전은 차두 규칙
+        (선행 캡슐 0.9m 전진 후 진입)이 계속 보장 — 짧은 블록은 자동으로 덜 들어감.
+        하위 등급 캡슐과 평시 운행은 정적 용량 그대로."""
+        cap = T.BLOCKS[block_id][3]
+        if c is not None and c.order is not None and c.order.prio == 0 \
+           and c.order.release_t <= self.t and c.order.state == OrderState.EN_ROUTE:
+            return max(cap, int(self.p.get("convoy_bunch_cap", 4)))
+        return cap
+
     def can_enter(self, c: Capsule, block_id: str, fwd: bool, locked: set[str],
                   ignore_prio: bool = False) -> tuple[bool, str]:
         a, b, length, cap, oneway = T.BLOCKS[block_id]
         if oneway and not fwd:
             return False, "oneway"
         occ = self.occ[block_id]
-        if len(occ) >= cap:
+        if len(occ) >= self.effective_cap(block_id, c):
             return False, "capacity"
         if occ:
             same_dir = all(o.fwd == fwd for o in occ)

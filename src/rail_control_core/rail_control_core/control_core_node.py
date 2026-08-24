@@ -300,9 +300,11 @@ class ControlCoreNode(Node):
                       [c.cid for c in idle])
         eng.orders[oid] = order
         # 디포에서 출발하므로 대기열(BB-08)을 앞에 붙인 경로를 부여합니다.
-        for i, c in enumerate(idle):
+        # v3.5: 콘보이는 OR2 단일 집결 — 추가 발령분도 예약 콘보이와 같은 규칙을 따릅니다
+        # (구 OR1/OR2 교대 배정 폐기).
+        for c in idle:
             c.order = order
-            c.route = [("BB-08", True)] + list(T.ROUTES["P0_OR1" if i % 2 == 0 else "P0_OR2"])
+            c.route = [("BB-08", True)] + list(T.ROUTES["P0_OR2"])
             c.idx, c.fwd = -1, True
             c.state = CapsuleState.QUEUED      # 발령 틱에 MOVING 으로 전이
             c.req_t = float("inf")
