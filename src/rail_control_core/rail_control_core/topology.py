@@ -137,6 +137,10 @@ ROUTES = {
                ("B2-01", True), ("B2-02", True), ("SP-ICU", True)],
     "P2_ICU": [("SP-INJ", False), ("BB-01", False), ("SB-UP", True),
                ("B2-01", True), ("B2-02", True), ("SP-ICU", True)],
+    # P3 멸균 물품 공급: CSR -> OR1 (v3.6, A 결정 2026-08-24 — 2F 간선 동방향 저속)
+    "P3_OR1": [("SP-CSR", False), ("B2-02", True), ("B2-03", True), ("B2-04a", True),
+               ("B2-05", True), ("B2-06", True), ("B2-07a", True), ("B2-08", True)],
+    # 엣지케이스용: 2F -> B1F 역방향 배송 (콘보이 서진과 B1F 본선에서 대향)
     "X_ICU_PHM": [("SP-ICU", False), ("B2-02", False), ("B2-01", False), ("SB-DN", True),
                   ("BB-01", True), ("BB-02", True), ("SP-PHM", True)],
     # P3_CSR: v3.6부터 '사용 기구 회수'(O-5) 경로로 재배정 — 공급(P3_OR1)과 짝 흐름

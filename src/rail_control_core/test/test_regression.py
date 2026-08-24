@@ -9,6 +9,7 @@ from rail_control_core import topology as T
 from rail_control_core.scenario import run
 
 TOL = 0.2  # 허용 오차(초): 30Hz 틱 양자화 감안
+CAPSULE_LEN = 0.6  # m — 이보다 가까우면 씬에서 캡슐이 물리적으로 겹친다
 
 # ── 기준값 (2026-08-24, v3.6.1: 노드 셋백 정지 + 대피 홀드 래치 — 씬 실사 반영) ──
 # 발령 O-1(공급 CSR->OR1)=2, O-2=1, O-3=2, O-4(P0)=8, O-5(회수 OR1->CSR)=17
@@ -112,6 +113,12 @@ def _run_with_invariants(mode: str):
             occ = eng.occ[bid]
             if len(occ) > _eff_cap(occ, cap):
                 violations.append(f"t={eng.t:.2f} {bid} 용량 초과 {len(occ)}/{cap}")
+            # 레일 위 캡슐 물리 겹침 (v3.6.1: 콘보이 피치 면제 시도가 0.000m 겹침을 냈다)
+            if bid != "BB-07" and len(occ) > 1:
+                ps = sorted(c.pos for c in occ)
+                worst = min(ps[i] - ps[i - 1] for i in range(1, len(ps)))
+                if worst < CAPSULE_LEN - 1e-6:
+                    violations.append(f"t={eng.t:.2f} {bid} 캡슐 겹침 간격 {worst:.3f}m")
             dirs = {c.fwd for c in occ}
             if len(dirs) > 1:
                 violations.append(f"t={eng.t:.2f} {bid} 정면 대치 {[c.cid for c in occ]}")

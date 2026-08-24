@@ -424,11 +424,11 @@ class Engine:
             occ = self.occ[c.block]
             i = occ.index(c)
             if i > 0:
-                prev_c = occ[i - 1]
-                # P0 콘보이 캡슐끼리는 블록 내 차두 0.9m 피치 감속을 면제하여 밀착 이동 폐색 주행
-                is_both_p0 = (c.order and c.order.prio == 0 and prev_c.order and prev_c.order.prio == 0)
-                if not is_both_p0:
-                    limit = min(limit, prev_c.pos - self.p["pitch"])
+                # ⚠️ 콘보이라도 차두 피치를 면제하면 안 된다 (2026-08-24 계측):
+                # 면제 시 BB-08 에서 캡슐 간격이 0.000m 까지 붙어 물리적으로 겹친다
+                # (캡슐 길이 0.6m). R9·Q16 의 "상한만 열고 차두 규칙이 물리 안전을
+                # 계속 보장한다"는 방어 논리가 그대로 무너지는 지점이라 유지한다.
+                limit = min(limit, occ[i - 1].pos - self.p["pitch"])
             v_tgt = self.limit_at(c)
             v = min(v_tgt, c.vel + self.p["accel"] * DT)  # 가속 0.8 제한(용혈), 감속 즉시(보수)
             new_pos = min(c.pos + v * DT, max(limit, c.pos))
