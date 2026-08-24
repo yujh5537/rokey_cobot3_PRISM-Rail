@@ -70,13 +70,17 @@ def _check_spec_section3() -> bool:
     return False
 
 
-def _check_params_yaml() -> bool:
-    """config/params.yaml 의 engine 블록이 scenario.PARAMS 와 같은지 검사.
+def _check_params_yaml(base_a=None, base_b=None, tol: float = 0.2) -> bool:
+    """config/params.yaml 의 engine·baseline 블록이 코드의 단일 출처와 같은지 검사.
 
     노드는 기동 시 이 yaml 로 scenario.PARAMS 를 덮어씁니다. 그래서 한쪽만 고치면
     **테스트는 통과하는데 ROS 시연에서만 옛 값이 쓰이는** 상태가 됩니다 — 테스트가
     거짓 안심을 주는 부류라 여기서 구조적으로 막습니다 (§3 표 검사와 같은 취지).
     v3.5 에서 실제로 priority_due_sec[2] 가 85 로 남아 있었습니다.
+
+    baseline 블록은 §6-2 회귀 기준값의 사본이라 test_regression 의 BASE 와 대조합니다
+    (v3.6 에서 mode_a_makespan_s 가 71.20 으로 남아 있던 것을 수동으로 발견 —
+    yaml 안에서 검사 밖이던 마지막 블록이라 여기에 포함시켰습니다).
     반환 False = 불일치 (호출자가 exit 1).
     """
     path = ROOT / "config" / "params.yaml"
@@ -90,19 +94,37 @@ def _check_params_yaml() -> bool:
         return True
     from rail_control_core.scenario import PARAMS
 
-    eng = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("engine") or {}
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    eng = raw.get("engine") or {}
     unknown = sorted(set(eng) - set(PARAMS))
     diff = [(k, eng[k], PARAMS[k]) for k in eng if k in PARAMS and eng[k] != PARAMS[k]]
-    if not diff and not unknown:
-        print(f"params.yaml: ✅ scenario.PARAMS 와 일치 ({len(eng)}키, 런타임 오버라이드 안전)")
+
+    # baseline 블록 = §6-2 기준값의 사본 → test_regression 의 BASE 와 대조
+    # 측정 오차(tol)가 아니라 '사본이 원본과 같은가'를 보는 것이므로 정확 비교한다.
+    # tol 로 비교하면 실제로 있었던 71.20 vs 71.17 드리프트가 그대로 통과한다.
+    bl = raw.get("baseline") or {}
+    bdrift = []
+    if base_a and base_b:
+        for key, expect in (("mode_a_makespan_s", base_a["makespan"]),
+                            ("mode_b_p0_arrive_s", base_b["O-4"]),
+                            ("tolerance_s", tol)):
+            if key in bl and abs(float(bl[key]) - expect) > 1e-9:
+                bdrift.append((key, bl[key], expect))
+
+    if not diff and not unknown and not bdrift:
+        print(f"params.yaml: ✅ 코드와 일치 (engine {len(eng)}키 + baseline {len(bl)}키)")
         return True
 
-    print("⚠️ config/params.yaml 이 scenario.PARAMS 와 다릅니다 — 노드 기동 시 yaml 이 이깁니다.")
-    print("   (테스트는 통과하지만 ROS 시연에서만 옛 값이 쓰이는 상태입니다)")
-    for k, yv, pv in diff:
-        print(f"   {k}: params.yaml={yv!r} vs scenario.PARAMS={pv!r}")
-    for k in unknown:
-        print(f"   {k}: params.yaml 에만 있는 키 — 엔진이 무시합니다 (오타 의심)")
+    if diff or unknown:
+        print("⚠️ config/params.yaml 의 engine 블록이 scenario.PARAMS 와 다릅니다 — 노드 기동 시 yaml 이 이깁니다.")
+        print("   (테스트는 통과하지만 ROS 시연에서만 옛 값이 쓰이는 상태입니다)")
+        for k, yv, pv in diff:
+            print(f"   {k}: params.yaml={yv!r} vs scenario.PARAMS={pv!r}")
+        for k in unknown:
+            print(f"   {k}: params.yaml 에만 있는 키 — 엔진이 무시합니다 (오타 의심)")
+    for k, yv, ev in bdrift:
+        print(f"⚠️ params.yaml baseline.{k}={yv} 가 회귀 기준값 {ev} 와 다릅니다 "
+              f"(test_regression.py 의 BASE 가 단일 출처)")
     return False
 
 
@@ -201,7 +223,7 @@ def main() -> None:
     print("  · 그래서 §6-2 의 헤드라인 지표는 P0 도착 시각입니다.")
     print()
     spec_ok = _check_spec_section3()
-    params_ok = _check_params_yaml()
+    params_ok = _check_params_yaml(base_a, base_b, tol)
 
     if drift:
         print()
