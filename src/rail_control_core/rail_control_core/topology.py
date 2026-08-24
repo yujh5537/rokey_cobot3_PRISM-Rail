@@ -125,10 +125,10 @@ ESCAPE_LANE = {
 }
 
 ROUTES = {
-    "P0_OR1": [("BB-09", True), ("BB-05", False), ("BB-04a", False), ("BB-03", False),
-               ("BB-02", False), ("BB-01", False), ("SB-UP", True),
-               ("B2-01", True), ("B2-02", True), ("B2-03", True), ("B2-04a", True),
-               ("B2-05", True), ("B2-06", True), ("B2-07a", True), ("B2-08", True)],
+    "P0": [("BB-09", True), ("BB-05", False), ("BB-04a", False), ("BB-03", False),
+           ("BB-02", False), ("BB-01", False), ("SB-UP", True),
+           ("B2-01", True), ("B2-02", True), ("B2-03", True), ("B2-04a", True),
+           ("B2-05", True), ("B2-09", True)],  # ◀ ST-OR2 단일 종점
     "P0_OR2": [("BB-09", True), ("BB-05", False), ("BB-04a", False), ("BB-03", False),
                ("BB-02", False), ("BB-01", False), ("SB-UP", True),
                ("B2-01", True), ("B2-02", True), ("B2-03", True), ("B2-04a", True),
@@ -137,7 +137,6 @@ ROUTES = {
                ("B2-01", True), ("B2-02", True), ("SP-ICU", True)],
     "P2_ICU": [("SP-INJ", False), ("BB-01", False), ("SB-UP", True),
                ("B2-01", True), ("B2-02", True), ("SP-ICU", True)],
-    # 엣지케이스용: 2F -> B1F 역방향 배송 (콘보이 서진과 B1F 본선에서 대향)
     "X_ICU_PHM": [("SP-ICU", False), ("B2-02", False), ("B2-01", False), ("SB-DN", True),
                   ("BB-01", True), ("BB-02", True), ("SP-PHM", True)],
     "P3_CSR": [("B2-08", False), ("B2-07a", False), ("B2-06", False), ("B2-05", False),
