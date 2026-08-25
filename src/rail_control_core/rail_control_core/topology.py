@@ -186,3 +186,69 @@ def validate() -> list[str]:
         if pts[0] != NODE_XY[a] or pts[-1] != NODE_XY[b]:
             errors.append(f"{bid}: 폴리라인 끝점이 노드 좌표와 불일치")
     return errors
+
+
+# ── OR1/OR2 서비스 딥 경로 (B 3차 핸드오프 "추가된 좌표", 2026-08-25) ──────────
+# "기존 메인 토폴로지 변경 금지" 지시 준수 — BLOCKS/ROUTES 는 손대지 않고 별도 자산
+# 계층으로만 얹는다. 도착(KPI) 판정은 종전대로 레일 종점 인계 시점이고, 이 경로는
+# 도착 후 연출 단계(CapsuleState.SERVICING)에서만 쓰인다.
+#
+# 좌표 변환 — 관제 Logical z = Scene z + 0.015 (레일 상면 -> 캡슐 중심):
+#   상단 Scene 12.985 -> Logical 13.0 (= RAIL_Z["2F"])  /  하단 Scene 10.985 -> 11.0
+#   캡슐 중심 x = 7.59 (Visual Rail x=7.89 은 씬 렌더 전용, 관제는 캡슐 중심만 발행)
+# 시퀀스(PDF 원문): ENTRY -> DOWN_TOP -> DOWN_BOTTOM/WORK -> STOP -> BLUE COMMAND
+#                   -> BLUE_END/UP_BOTTOM -> UP_TOP -> REJOIN
+# work_idx=3 : pts[3] 이 WORK(하단 정지점). BLUE_CMD 전에는 여기가 진행 상한이다.
+SERVICE_SEQ = {
+    # ST-OR1 (4.5, 4.5) 에서 연장 — 총 9.09m, WORK 는 5.59m 지점
+    "B2-08": {"pts": [(4.5, 4.5, 13.0),    # ST-OR1 (레일 종점 = 딥 시작)
+                      (7.59, 4.5, 13.0),   # OR1_ENTRY
+                      (7.59, 4.0, 13.0),   # OR1_DOWN_TOP
+                      (7.59, 4.0, 11.0),   # OR1_DOWN_BOTTOM / WORK  ◀ 정지·작업
+                      (7.59, 5.0, 11.0),   # OR1_BLUE_END / UP_BOTTOM
+                      (7.59, 5.0, 13.0),   # OR1_UP_TOP
+                      (7.59, 4.5, 13.0)],  # OR1_REJOIN
+              "work_idx": 3},
+    # ST-OR2 (4.5, -0.8) 에서 연장 — 총 9.09m, WORK 는 5.59m 지점
+    "B2-09": {"pts": [(4.5, -0.8, 13.0),    # ST-OR2 (레일 종점 = 딥 시작)
+                      (7.59, -0.8, 13.0),   # OR2_ENTRY
+                      (7.59, -1.3, 13.0),   # OR2_DOWN_TOP
+                      (7.59, -1.3, 11.0),   # OR2_DOWN_BOTTOM / WORK  ◀ 정지·작업
+                      (7.59, -0.3, 11.0),   # OR2_BLUE_END / UP_BOTTOM
+                      (7.59, -0.3, 13.0),   # OR2_UP_TOP
+                      (7.59, -0.8, 13.0)],  # OR2_REJOIN
+              "work_idx": 3},
+}
+
+
+def _svc_precompute() -> dict:
+    """SERVICE_SEQ 폴리라인의 구간 누적거리를 미리 계산 (매 틱 재계산 방지)."""
+    out = {}
+    for bid, spec in SERVICE_SEQ.items():
+        pts = spec["pts"]
+        cum = [0.0]
+        for (x1, y1, z1), (x2, y2, z2) in zip(pts, pts[1:]):
+            cum.append(cum[-1] +
+                       ((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2) ** 0.5)
+        out[bid] = {"pts": pts, "cum": cum, "total": cum[-1],
+                    "work_s": cum[spec["work_idx"]]}
+    return out
+
+
+SERVICE_GEO = _svc_precompute()
+
+
+def service_pose(bid: str, s: float) -> tuple[float, float, float]:
+    """서비스 딥 경로 위 3D 자세 — 진행거리 s(m) -> (x, y, z).
+    발행원 반올림 원칙 동일(부동소수 잔재를 수신측에 떠넘기지 않는다)."""
+    g = SERVICE_GEO[bid]
+    s = max(0.0, min(s, g["total"]))
+    pts, cum = g["pts"], g["cum"]
+    for i in range(len(cum) - 1):
+        if s <= cum[i + 1] + 1e-12 or i == len(cum) - 2:
+            seg = cum[i + 1] - cum[i]
+            r = 0.0 if seg <= 1e-9 else (s - cum[i]) / seg
+            (x1, y1, z1), (x2, y2, z2) = pts[i], pts[i + 1]
+            return (round(x1 + (x2 - x1) * r, 4), round(y1 + (y2 - y1) * r, 4),
+                    round(z1 + (z2 - z1) * r, 4))
+    return pts[-1]

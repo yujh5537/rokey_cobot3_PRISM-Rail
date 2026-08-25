@@ -217,7 +217,11 @@ class ControlCoreNode(Node):
             elif ev in ("RTA_ENGAGED", "PRIORITY_PROMOTED"):
                 # 슬랙 회복(R11)·등급 승격(R12) — UI 의 due 카운트다운/속도 그래프용
                 self.get_logger().warn(f"[{ev}] {subj} {detail}")
-            elif ev in ("CODE_CRIMSON", "SIM_DONE", "ORDER_RELEASE", "ORDER_ARRIVE"):
+            elif ev == "BLUE_CMD":
+                # v3.7: 관제의 BLUE 이동 승인 — 시연 T3 로그의 볼거리라 눈에 띄게 남긴다
+                self.get_logger().info(f"🔵 [BLUE_CMD] {subj} {detail}")
+            elif ev in ("CODE_CRIMSON", "SIM_DONE", "ORDER_RELEASE", "ORDER_ARRIVE",
+                        "SERVICE_START", "SERVICE_DONE"):
                 self.get_logger().info(f"[{ev}] {subj} {detail}")
             elif ev in PREEMPT_EVENTS and ev != "RESUME":
                 self.get_logger().warn(f"[선점] {ev} {self._p0_source()} → {subj} ({detail})")

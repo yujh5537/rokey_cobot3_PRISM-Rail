@@ -32,6 +32,9 @@ engine:
   # v3.6.1 씬 실사 반영 — 노드는 공유 기하라 끝점 정지 시 통과 캡슐과 겹침.
   node_setback: 0.4      # m — 진입 거부 시 블록 끝에서 물러나 정지하는 거리
   evac_hold_frac: 0.5    # 대피 레인 내 홀드 지점(길이 비율) — 재진입 진동 방지
+  # v3.7 OR 서비스 딥 — 도착 후 연출 전용(레일 역학·기준값에 영향 없음)
+  speed_service: 0.5     # m/s — 딥 경로 서행 (수술실 진입 저속)
+  work_dwell_sec: 2.0    # s — WORK 하단 작업 체류. 이후 관제가 BLUE_CMD 발행
   pitch: 0.9             # m — 캡슐 점유 피치 (길이 0.6 + 안전간격 0.3)
   yield_window_sec: 15.0 # P0 선점 잠금 파도(bow-wave) 폭
   unload_sec: 2.0        # 목적지 하역 소요

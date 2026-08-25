@@ -71,6 +71,11 @@ class Bridge:
                 mk = max(o.arrive_t for o in self.eng.orders.values())
                 self.eng.log("SIM_DONE", "sim", f"makespan={mk:.2f}")
                 self._done_notified = True
+            # v3.7: SIM_DONE(=KPI 종료) 이후에도 OR 서비스 딥 연출이 남아 있으면
+            # 발행을 계속한다. 연출까지 끝나야 정지 — 기준값(makespan)은 그대로.
+            if self._done_notified and self.running and not any(
+                    x.state in (CapsuleState.SERVICING, CapsuleState.UNLOADING)
+                    for x in self.eng.capsules.values()):
                 self.running = False
         out["capsules"] = self._capsule_payload()
         blocks = self._block_payload()
@@ -92,7 +97,7 @@ class Bridge:
         return {
             "capsule_id": c.cid,
             "block_id": c.block or "",
-            "pos_m": round(c.pos, 4),
+            "pos_m": round(c.svc_s if c.state == CapsuleState.SERVICING else c.pos, 4),
             "forward": bool(c.fwd),
             "state": c.state.value,
             "order_id": c.order.oid if c.order else "",
@@ -104,10 +109,14 @@ class Bridge:
         코어가 계산해서 실어 보낸다. 브릿지는 프림 트랜스폼에 꽂기만 하면 된다.
 
         - DOCKED: 디포 측면 가상 슬롯 (B 도크 좌표 회신 시 geometry 만 수정)
+        - SERVICING: OR 서비스 딥 경로 보간 — ⚠️ z 가 13.0 -> 11.0 으로 내려간다.
+          수신측 UI 가 층 고정 높이를 가정하면 캡슐이 사라져 보이니 높이 축 확인 필요.
         - REMOVED: 블록이 없으므로 원점. 수신측은 이 상태에서 프림을 숨긴다.
         """
         if c.state == CapsuleState.DOCKED:
             x, y, z = G.dock_slot_xyz(int(c.cid[1:]) - 1)
+        elif c.state == CapsuleState.SERVICING and c.svc_bid:
+            x, y, z = G.service_pose_xyz(c.svc_bid, c.svc_s)
         elif c.block:
             x, y, z = G.pose_to_xyz(c.block, c.pos, bool(c.fwd))
         else:

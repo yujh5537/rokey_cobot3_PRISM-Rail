@@ -35,10 +35,10 @@
 | 기존 JSON 필드 | 새 msg 필드 | 비고 |
 |---|---|---|
 | `capsule_id: "C-01"` | `capsules[].capsule_id: "C01"` | **하이픈 제거** (명세 §5) |
-| `current_block` | `capsules[].block_id` | REMOVED 시 `""` |
+| `current_block` | `capsules[].block_id` | REMOVED·SERVICING 시 `""` (레일 점유 해제 상태) |
 | `node` | (없음) | 노드 대신 `block_id + pos_m + forward`가 정본 |
 | `x, y, z` | `capsules[].x, y, z` | **코어가 계산해 줌** — 프림 트랜스폼에 그대로 적용 |
-| `status` | `capsules[].state` | 값 집합: DOCKED/QUEUED/STANDBY/MOVING/YIELD_WAIT/EVACUATED/FINISHING/UNLOADING/REMOVED |
+| `status` | `capsules[].state` | 값 집합: DOCKED/QUEUED/STANDBY/MOVING/YIELD_WAIT/EVACUATED/FINISHING/UNLOADING/**SERVICING**/REMOVED |
 | (없음) | `capsules[].pos_m, forward` | 블록 진입점 기준 진행거리·방향 (정밀 보간 필요 시 사용) |
 | (없음) | `sim_t`, `stamp` | 시뮬 시각 / ROS 시각 |
 
@@ -51,10 +51,22 @@
 > msg `capsule_id`(C01~C10) ↔ 프림(Capsule_01~10) 대응은 브릿지 내부 매핑 — 스키마 변경 없음.
 `state == "REMOVED"` 면 프림 숨김(visibility off) 권장.
 
+> **[v3.7 추가 — OR 서비스 딥]** 새 상태 `SERVICING` 은 **숨기면 안 됩니다**(수술실 딥 연출 중).
+> 이 상태에서는 `z` 가 **13.0 → 11.0 으로 하강**하고 `x` 가 7.59 까지 나가며, `pos_m` 은 블록
+> 진행거리가 아니라 **딥 경로 진행거리**(0~9.09m, WORK=5.59m)입니다. 층 고정 높이를 가정한
+> UI·브릿지는 높이 축 처리를 확인해 주세요. 좌표는 그대로 트랜스폼에 꽂으면 됩니다.
+>
+> ```python
+> set_visible(prim, c["state"] != "REMOVED")   # SERVICING 은 보이는 상태
+> ```
+
 ## 2. /capsule_cmd — **폐기**
 
 `kind=="capsule_state"` 정보는 pose의 `state` 필드로, `kind=="preempt"` 연출 정보는
 `/order_event` 의 `event ∈ {YIELD, EVAC_LANE, EVAC_SPUR, MEET_PASS, FINISH_ALLOWED, RESUME}` 로 대체됩니다.
+v3.7 에서 OR 서비스 딥 이벤트 3종이 같은 토픽에 추가되었습니다 — `SERVICE_START`(딥 진입) /
+`BLUE_CMD`(관제의 BLUE 이동 승인 — **자동 아님**) / `SERVICE_DONE`(REJOIN 복귀 완료).
+`subject` 는 캡슐 id, `detail` 은 `"B2-08 서비스 딥 진입"` 형식입니다.
 
 | 기존 preempt JSON | 새 OrderEvent 대응 |
 |---|---|

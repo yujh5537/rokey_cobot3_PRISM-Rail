@@ -22,6 +22,7 @@ class CapsuleState(Enum):
     FINISHING = "FINISHING"    # 완주 허용 주행 (R4)
     UNLOADING = "UNLOADING"    # 목적지 하역
     REMOVED = "REMOVED"        # 시나리오 상 트랙 이탈(회송 생략)
+    SERVICING = "SERVICING"    # 도착 후 OR 서비스 딥 수행 중 (v3.7)
 
 
 class BlockState(Enum):
@@ -60,3 +61,8 @@ class Capsule:
     unload_until: float = 0.0
     req_t: float = float("inf")  # 현재 블록 진입 요청 시각(FCFS용)
     vel: float = 0.0           # 현재 속도(m/s) — 가속 램프(용혈 방지 0.8m/s²)용
+    # v3.7 OR 서비스 딥 — 도착(인계) 후 연출 전용. 레일 역학과 무관한 별도 축.
+    svc_bid: str | None = None   # 딥 경로 id (B2-08=OR1 / B2-09=OR2)
+    svc_s: float = 0.0           # 딥 경로 진행 거리(m)
+    svc_wait_until: float = -1.0  # WORK 작업 체류 종료 시각 (-1 = 아직 미도달)
+    svc_blue: bool = False       # 관제 BLUE 이동 명령 승인 여부 (자동 아님)

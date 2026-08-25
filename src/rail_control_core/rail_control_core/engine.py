@@ -26,6 +26,7 @@ class Engine:
         self._finish_logged: set[str] = set()
         self._stall_since: float | None = None
         self._deadlock_logged = False
+        self.svc_q: dict[str, list[Capsule]] = {}   # v3.7 OR 서비스 딥 진행 큐
 
     # ---------- 조회 ----------
     def speed(self, block_id: str, c=None) -> float:
@@ -337,6 +338,43 @@ class Engine:
         # 자기 자신 제외 필수: 지선 왕복은 '같은 블록 역방향' 전이라 본인이 점유자로 잡힘
         return not any(x is not c and x.fwd != nfwd for x in self.occ[nbid])
 
+    def _service_step(self):
+        """OR 서비스 딥 스텝 (v3.7) — 도착 후 연출 전용, 레일 역학과 완전 분리.
+
+        B 3차 핸드오프 제어 규칙 5조를 그대로 구현한다:
+          BLUE 는 자동 선택 경로가 아니다 -> WORK(하단)에서 무조건 정지하고,
+          관제가 작업 체류(work_dwell_sec) 후 BLUE_CMD 를 발행해야 비로소
+          하단 횡단(BLUE_END=UP_BOTTOM) -> 상승 -> REJOIN 이 진행된다.
+        한 곳에 여러 대(콘보이 4대)가 몰려도 경로 위 차두(pitch)를 그대로 적용하고
+        WORK 는 단독 점유라 딥이 직렬 파이프라인으로 흐른다.
+        """
+        vs = self.p.get("speed_service", 0.5)
+        for bid, q in self.svc_q.items():
+            g = T.SERVICE_GEO[bid]
+            done = []
+            for i, c in enumerate(q):
+                # 선두는 경로 끝까지, 후속은 선행 캡슐로부터 차두 간격 유지
+                cap_s = g["total"] if i == 0 else max(0.0, q[i - 1].svc_s - self.p["pitch"])
+                if not c.svc_blue:
+                    cap_s = min(cap_s, g["work_s"])   # BLUE 승인 전에는 WORK 가 상한
+                new_s = min(c.svc_s + vs * DT, max(cap_s, c.svc_s))
+                if new_s > c.svc_s + 1e-9:
+                    self._note_progress()
+                c.svc_s = new_s
+                if not c.svc_blue and c.svc_s >= g["work_s"] - 1e-9:
+                    if c.svc_wait_until < 0:
+                        c.svc_wait_until = self.t + self.p.get("work_dwell_sec", 2.0)
+                    elif self.t >= c.svc_wait_until:
+                        c.svc_blue = True
+                        self.log("BLUE_CMD", c.cid, f"{bid} WORK 완료 -> BLUE 이동 승인")
+                if c.svc_s >= g["total"] - 1e-9:
+                    c.state = CapsuleState.REMOVED
+                    c.svc_bid = None
+                    self.log("SERVICE_DONE", c.cid, f"{bid} REJOIN 도달")
+                    done.append(c)
+            for c in done:
+                q.remove(c)
+
     def _do_enter(self, c: Capsule, block_id: str, fwd: bool):
         self._note_progress()
         if c.block is not None and c in self.occ[c.block]:
@@ -406,10 +444,20 @@ class Engine:
         # 이동 + 하역
         for c in self.capsules.values():
             if c.state == CapsuleState.UNLOADING and self.t >= c.unload_until:
-                c.state = CapsuleState.REMOVED
+                svc = c.block if c.block in T.SERVICE_SEQ else None
                 if c.block and c in self.occ[c.block]:
                     self.occ[c.block].remove(c)
-                    c.block = None
+                c.block = None
+                if svc:
+                    # v3.7: OR 스테이션은 인계(하역) 후 서비스 딥 연출로 넘어간다.
+                    # 레일 점유 해제 타이밍은 REMOVED 와 동일 -> 레일 역학·기준값 불변.
+                    c.state = CapsuleState.SERVICING
+                    c.svc_bid, c.svc_s = svc, 0.0
+                    c.svc_wait_until, c.svc_blue = -1.0, False
+                    self.svc_q.setdefault(svc, []).append(c)
+                    self.log("SERVICE_START", c.cid, f"{svc} 서비스 딥 진입")
+                else:
+                    c.state = CapsuleState.REMOVED
                 self._check_order_done(c.order)
             if c.state not in (CapsuleState.MOVING, CapsuleState.FINISHING,
                                CapsuleState.EVACUATED):
@@ -441,6 +489,8 @@ class Engine:
                 self._finish_logged.add(c.cid)
                 c.state = CapsuleState.FINISHING
                 self.log("FINISH_ALLOWED", c.cid, c.block)
+
+        self._service_step()
 
         # 진입 요청 수집
         requests: list[Capsule] = []
@@ -540,15 +590,17 @@ class Engine:
         c.unload_until = self.t + self.p["unload_sec"]
         self.log("ARRIVE", c.cid, c.block or "?")
         o = c.order
-        if o and all(self.capsules[x].state in (CapsuleState.UNLOADING, CapsuleState.REMOVED)
-                     for x in o.capsule_ids):
+        arrived = (CapsuleState.UNLOADING, CapsuleState.REMOVED, CapsuleState.SERVICING)
+        if o and all(self.capsules[x].state in arrived for x in o.capsule_ids):
             if o.arrive_t is None:
                 o.arrive_t = self.t
                 o.state = OrderState.ARRIVED
                 self.log("ORDER_ARRIVE", o.oid, f"t={self.t:.2f}")
 
     def _check_order_done(self, o: Order | None):
-        if o and all(self.capsules[x].state == CapsuleState.REMOVED for x in o.capsule_ids):
+        # SERVICING = 레일 인계까지 끝난 뒤의 연출 단계 -> 오더 회계상 완료 동급 (v3.7)
+        if o and all(self.capsules[x].state in (CapsuleState.REMOVED, CapsuleState.SERVICING)
+                     for x in o.capsule_ids):
             o.state = OrderState.DONE
 
     def log(self, ev: str, subj: str, detail: str):

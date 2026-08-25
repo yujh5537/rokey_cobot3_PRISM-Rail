@@ -59,3 +59,9 @@ def dock_slot_xyz(slot_index: int) -> tuple[float, float, float]:
     """디포 도크 슬롯 (DOCKED 캡슐 배치, 관제 정의가 정본 — 씬은 이 좌표에 시각물 배치)."""
     x, y = T.DOCK_SLOTS[slot_index % len(T.DOCK_SLOTS)]
     return (x, y, T.RAIL_Z["B1F"])
+
+
+def service_pose_xyz(bid: str, s: float) -> tuple[float, float, float]:
+    """OR 서비스 딥 경로(SERVICE_SEQ) 위 3D 자세 — 발행원 반올림 원칙 동일.
+    SERVICING 캡슐은 블록 밖(레일 해제 상태)이라 pose_to_xyz 대신 이 경로를 쓴다."""
+    return T.service_pose(bid, s)

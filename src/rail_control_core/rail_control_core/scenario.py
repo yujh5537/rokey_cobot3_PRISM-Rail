@@ -21,6 +21,10 @@ PARAMS = {
     # v3.6.1 씬 실사 반영: 대기 정지는 노드에서 0.4m 물러남 / 대피는 레인 중앙 홀드
     "node_setback": 0.4,
     "evac_hold_frac": 0.5,
+    # v3.7 OR 서비스 딥 (B 3차 핸드오프 "추가된 좌표"): 딥 서행 0.5m/s,
+    # WORK 하단에서 작업 체류 2s 후 관제가 BLUE 이동 명령을 발행한다.
+    "speed_service": 0.5,
+    "work_dwell_sec": 2.0,
     "pitch": 0.9,
     "yield_window_sec": 15.0,
     "unload_sec": 2.0,

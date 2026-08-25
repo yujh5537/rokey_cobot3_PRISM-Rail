@@ -33,6 +33,12 @@
       "시나리오 변경: O-1 이 '멸균 물품 공급'(ST-CSR->ST-OR1, 발령 2.0s)으로 역전되고, 짝 오더 O-5 '사용 기구 회수'(ST-OR1->ST-CSR, 17.0s, C08)가 신설됨. 선배치 C05@ST-CSR / C08@ST-OR1, 디포 유휴는 C09·C10 만.",
       "회귀 기준값 재측정: 모드 A 71.17 / 모드 B 85.77, P0 도착 71.17->67.07(-5.8%). 멸균 공급은 양 모드 동률 36.17 (콘보이와 동방향 무간섭)."
     ],
+    "v3_7_changes": [
+      "OR 서비스 딥 통합 (B 3차 핸드오프 \"추가된 좌표\") — 캡슐 상태 SERVICING 신설, 이벤트 어휘 SERVICE_START·BLUE_CMD·SERVICE_DONE 추가. msg 구조·키 불변(값 의미만 확장).",
+      "⚠️ SERVICING 캡슐은 Z 가 13.0 -> 11.0 으로 하강하고 X 가 7.59 까지 나간다(수술실 딥). block_id=\"\", pos_m=딥 경로 진행 거리. 층 고정 높이를 가정한 UI 는 갱신 필요하고, REMOVED 와 달리 프림을 숨기면 안 된다.",
+      "BLUE 구간은 자동 경로가 아니다 — WORK(하단)에서 정지 후 관제가 BLUE_CMD 를 발행해야 진행된다. 씬·UI 는 이 이벤트를 승인 로그로 표기하면 된다.",
+      "회귀 기준값 불변 — 도착(KPI) 판정은 종전대로 레일 종점 인계 시점이고 딥은 도착 후 연출이라, 모드 A 74.97 / 모드 B 86.77 / P0 도착 67.07 그대로. 다만 발행은 딥 연출 종료까지 유지된다(모드 A t=93.00 / 모드 B t=90.30)."
+    ],
     "v3_6_1_changes": [
       "노드 셋백: 진입 대기 캡슐의 정차 위치가 블록 끝이 아니라 '끝 - 0.4m'. /capsule_pose 의 pos_m·x/y/z 가 그만큼 앞에서 멈춘 값으로 발행된다 (씬은 수정 불필요 — 좌표만 바뀜).",
       "대피 홀드: EVACUATED 캡슐은 대피 레인 중앙(50%)에 정지해 파도가 완전히 지날 때까지 대기. 기존의 레인 내 왕복 이동이 사라진다.",
@@ -49,15 +55,15 @@
       },
       "rate": "rate_hz(기본 30Hz) 매 틱",
       "direction": "Core(A) -> Isaac Sim(B) · Bridge(C) · UI(D)",
-      "description": "캡슐 10대의 논리 위치 + 씬 월드 좌표. 브릿지는 /World/Capsules/{capsule_id} 트랜스폼에 (x,y,z)를 그대로 적용하고, state=='REMOVED' 면 프림을 숨긴다.",
+      "description": "캡슐 10대의 논리 위치 + 씬 월드 좌표. 브릿지는 /World/Capsules/{capsule_id} 트랜스폼에 (x,y,z)를 그대로 적용하고, state=='REMOVED' 면 프림을 숨긴다. SERVICING 은 보이는 상태이므로 숨기지 말 것(수술실 딥 연출 중).",
       "fields": {
         "capsule_id": "C01~C10",
-        "block_id": "현재 블록. REMOVED 면 \"\"",
-        "pos_m": "블록 진입점 기준 진행 거리(m) — 정밀 보간이 필요할 때 사용",
+        "block_id": "현재 블록. REMOVED·SERVICING 이면 \"\" (레일 점유 해제 상태)",
+        "pos_m": "블록 진입점 기준 진행 거리(m) — 정밀 보간이 필요할 때 사용. SERVICING 이면 서비스 딥 경로 진행 거리(0~9.09m, WORK=5.59m)",
         "forward": "블록 내 진행 방향 (node_a->node_b 가 true)",
-        "state": "DOCKED|QUEUED|STANDBY|MOVING|YIELD_WAIT|EVACUATED|FINISHING|UNLOADING|REMOVED",
+        "state": "DOCKED|QUEUED|STANDBY|MOVING|YIELD_WAIT|EVACUATED|FINISHING|UNLOADING|SERVICING|REMOVED",
         "order_id": "배정된 오더. 없으면 \"\"",
-        "x/y/z": "씬 월드 좌표. Z 는 B1F 레일 4.0 / 2F 레일 13.0, 샤프트는 보간. DOCKED 는 디포 측면 가상 슬롯(도크 좌표 회신 시 코어만 수정), REMOVED 는 0."
+        "x/y/z": "씬 월드 좌표. Z 는 B1F 레일 4.0 / 2F 레일 13.0, 샤프트는 보간. DOCKED 는 디포 측면 가상 슬롯(도크 좌표 회신 시 코어만 수정), REMOVED 는 0. ⚠️ SERVICING 은 OR 서비스 딥 경로 위 좌표로, Z 가 13.0 -> 11.0 까지 내려가고 X 가 7.59 까지 나간다 — 층 고정 높이를 가정한 UI 는 갱신 필요."
       },
       "example": {
         "sim_t": 12.4,
@@ -99,13 +105,16 @@
         "EVAC_LANE",
         "EVAC_SPUR",
         "MEET_PASS",
+        "SERVICE_START",
+        "BLUE_CMD",
+        "SERVICE_DONE",
         "FINISH_ALLOWED",
         "RESUME",
         "ARRIVE"
       ],
       "fields": {
         "subject": "오더 id(오더 이벤트) 또는 캡슐 id(캡슐 이벤트)",
-        "detail": "이벤트별 맥락. EVAC_* 와 MEET_PASS 는 \"B2-04a->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=86.77\", DEADLOCK 은 \"무진행 20s, 대기: C05@...\", RTA_ENGAGED 는 \"slack=4.0s v_cmd=1.05\"",
+        "detail": "이벤트별 맥락. EVAC_* 와 MEET_PASS 는 \"B2-04a->B2-04b\" 형식, YIELD 는 \"블록:사유\", SIM_DONE 은 \"makespan=86.77\", DEADLOCK 은 \"무진행 20s, 대기: C05@...\", RTA_ENGAGED 는 \"slack=4.0s v_cmd=1.05\", SERVICE_* 와 BLUE_CMD 는 \"B2-08 서비스 딥 진입\" 형식(subject=캡슐 id)",
         "reason": "선점 계열에만. 사람이 읽는 설명 (R2~R4 근거)",
         "by": "선점 계열에만. 선점을 유발한 P0 오더 id"
       },
