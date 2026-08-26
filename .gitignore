@@ -24,3 +24,4 @@ log/
 # Isaac Sim 대용량 캐시 및 임시 로그
 *.log
 *.tmp
+isaacpjt/textures/dataset/

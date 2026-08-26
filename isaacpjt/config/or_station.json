@@ -1,0 +1,161 @@
+{
+ "scene_note": "world coords frozen from live scene (step 4R)",
+ "or": "OR2",
+ "robot_prim": "/World/m0609",
+ "robot_world": [
+  7.9077,
+  -1.731,
+  10.2274
+ ],
+ "button_touch_or2": [
+  7.59,
+  -1.3,
+  10.363
+ ],
+ "capsule_work_or2": [
+  7.59,
+  -1.3,
+  10.985
+ ],
+ "teach_deg": {
+  "button": [
+   76.6,
+   3.9,
+   79.5,
+   -3.0,
+   80.1,
+   -61.9,
+   0.0
+  ],
+  "grasp": [
+   52.4,
+   28.1,
+   33.4,
+   -3.0,
+   100.8,
+   -61.9,
+   19.9
+  ],
+  "camera": [
+   287.8,
+   3.9,
+   79.5,
+   -3.0,
+   80.1,
+   -61.9,
+   19.9
+  ],
+  "tray": [
+   166.6,
+   3.9,
+   0.2,
+   -3.0,
+   83.5,
+   -61.9,
+   0.0
+  ],
+  "button2": [
+   76.6,
+   3.9,
+   79.5,
+   -3.0,
+   80.1,
+   -61.9,
+   0.0
+  ],
+  "button_approach": [
+   76.6,
+   -8.1,
+   79.5,
+   -3.0,
+   80.1,
+   -61.9,
+   0.0
+  ]
+ },
+ "candidates": {
+  "robot": [
+   "/World/m0609"
+  ],
+  "camera": [
+   "/World/Hospital/F2/rsd455/RSD455/Camera_Pseudo_Depth",
+   "/World/Hospital/F2/rsd455/RSD455/Camera_Pseudo_Depth  (Camera prim)",
+   "/World/Hospital/F2/rsd455/RSD455/Camera_Pseudo_Depth/OmniverseKitViewportCameraMesh",
+   "/World/Hospital/F2/rsd455/RSD455/Camera_Pseudo_Depth/OmniverseKitViewportCameraMesh/CameraMode",
+   "/World/Hospital/F2/rsd455/RSD455/Visual/Camera_module",
+   "/World/Hospital/F2/rsd455/RSD455/Visual/camera_mask"
+  ],
+  "tray": [],
+  "button": [
+   "/World/RailNetwork/F2/OR1_ServiceReturn/Rail_01_BLUE_BUTTON_MOVE",
+   "/World/RailNetwork/F2/OR2_ServiceReturn/Rail_01_BLUE_BUTTON_MOVE",
+   "/World/CapsuleButtonPhysics",
+   "/World/CapsuleButtonPhysics/Capsule_01/Button",
+   "/World/CapsuleButtonPhysics/Capsule_01/Button_Joint",
+   "/World/CapsuleButtonPhysics/Capsule_02/Button"
+  ],
+  "capsule": [
+   "/World/Capsules/Capsule_01",
+   "/World/Capsules/Capsule_02",
+   "/World/Capsules/Capsule_03",
+   "/World/Capsules/Capsule_04",
+   "/World/Capsules/Capsule_05",
+   "/World/Capsules/Capsule_06"
+  ]
+ },
+ "arm_joints": [
+  "/World/m0609/joints/joint_1",
+  "/World/m0609/joints/joint_2",
+  "/World/m0609/joints/joint_3",
+  "/World/m0609/joints/joint_4",
+  "/World/m0609/joints/joint_5",
+  "/World/m0609/joints/joint_6"
+ ],
+ "finger_joint": "/World/m0609/onrobot_rg2ft/joints/finger_joint",
+ "camera_prim": "/World/Hospital/F2/rsd455/RSD455/Camera_OmniVision_OV9782_Left",
+ "camera_world": [
+  7.8781,
+  -2.1574,
+  10.3504
+ ],
+ "tray_candidates": [
+  [
+   "/World/Cube",
+   [
+    7.2,
+    -1.5248,
+    9.3
+   ],
+   [
+    1.0,
+    1.0,
+    0.6
+   ]
+  ]
+ ],
+ "button_capsule_pattern": "/World/CapsuleButtonPhysics/{cap}/Button",
+ "button_joint_pattern": "/World/CapsuleButtonPhysics/{cap}/Button_Joint",
+ "blue_rail_or2": "/World/RailNetwork/F2/OR2_ServiceReturn/Rail_01_BLUE_BUTTON_MOVE",
+ "camera_note": "OV9782_Color prim has broken xform in this asset - use Left. HFOV=90.5deg",
+ "camera_hfov_deg": 90.5,
+ "ocr_constraint": {
+  "present_dist_max_m_at1920": 0.15,
+  "alt": "render 2560x1440 -> dist<=0.20"
+ },
+ "tray_prim": "/World/Cube",
+ "tray_world": [
+  7.2,
+  -1.5248,
+  9.3
+ ],
+ "tray_warning": "NEVER run step-1 asset script in team scene (it deletes /World/Cube)",
+ "door_mechanism": {
+  "type": "slide_y_absolute",
+  "left_closed": 0.0605,
+  "left_open": 0.1755,
+  "right_closed": -0.0605,
+  "right_open": -0.1755,
+  "anim_sec": 0.7,
+  "source": "teammate controller (2026-08-26)"
+ }
+}
