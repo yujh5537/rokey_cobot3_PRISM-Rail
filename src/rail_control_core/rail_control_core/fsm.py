@@ -66,3 +66,5 @@ class Capsule:
     svc_s: float = 0.0           # 딥 경로 진행 거리(m)
     svc_wait_until: float = -1.0  # WORK 작업 체류 종료 시각 (-1 = 아직 미도달)
     svc_blue: bool = False       # 관제 BLUE 이동 명령 승인 여부 (자동 아님)
+    svc_door_closed: bool = False  # v3.8: Isaac OR 스테이션 DOOR_CLOSED 수신 (하역 완료)
+    svc_label: dict | None = None  # v3.8: /label_scan 인식 결과 (라벨-캡슐 대조용)

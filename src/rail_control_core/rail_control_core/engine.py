@@ -338,6 +338,50 @@ class Engine:
         # 자기 자신 제외 필수: 지선 왕복은 '같은 블록 역방향' 전이라 본인이 점유자로 잡힘
         return not any(x is not c and x.fwd != nfwd for x in self.occ[nbid])
 
+    # ---------- v3.8: Isaac OR 스테이션 이벤트 연동 ----------
+    def _needs_door_event(self, c, bid: str) -> bool:
+        """이 캡슐이 DOOR_CLOSED 를 기다려야 하는가.
+
+        매니퓰레이터가 설치된 스테이션(기본 B2-08=OR1)에 정차한 캡슐만 대상.
+        station_event_enabled=False 면 전부 기존 시간 기반 -> 회귀 테스트 기준값 보존.
+        """
+        if not self.p.get("station_event_enabled", False):
+            return False
+        return bid in self.p.get("station_event_blocks", ["B2-08"])
+
+    def on_station_event(self, capsule_id: str, event: str, payload: dict | None = None):
+        """Isaac /or_station_event 수신 진입점 (ROS 노드가 호출).
+
+        DOOR_OPEN 은 기록만, DOOR_CLOSED 가 출발 게이트를 연다.
+        LABEL_READ 는 라벨-캡슐 대조 결과를 캡슐에 붙여 UI/로그로 흘린다.
+        """
+        c = self.capsules.get(capsule_id)
+        if c is None:
+            self.log("STATION_EVENT", capsule_id, f"미등록 캡슐의 {event} 무시")
+            return False
+        if event == "DOOR_OPEN":
+            self.log("DOOR_OPEN", capsule_id, "OR 스테이션 캡슐 개방 — 하역 시작")
+        elif event == "DOOR_CLOSED":
+            c.svc_door_closed = True
+            self.log("DOOR_CLOSED", capsule_id, "하역 완료 — 출발 게이트 개방")
+        elif event == "LABEL_READ":
+            c.svc_label = payload or {}
+            lab = (payload or {}).get("label_capsule")
+            ok = (payload or {}).get("ok")
+            match = (lab == capsule_id) if lab else None
+            c.svc_label["match"] = match
+            if match is False:
+                self.log("LABEL_MISMATCH", capsule_id,
+                         f"라벨 캡슐ID {lab} != 관제 {capsule_id} — 오적재 의심")
+            else:
+                self.log("LABEL_READ", capsule_id,
+                         f"라벨 인식 {'성공' if ok else '실패'} "
+                         f"({(payload or {}).get('order_id')} / {(payload or {}).get('delivery_add')})")
+        else:
+            self.log("STATION_EVENT", capsule_id, f"미정의 이벤트 {event}")
+            return False
+        return True
+
     def _service_step(self):
         """OR 서비스 딥 스텝 (v3.7) — 도착 후 연출 전용, 레일 역학과 완전 분리.
 
@@ -364,6 +408,21 @@ class Engine:
                 if not c.svc_blue and c.svc_s >= g["work_s"] - 1e-9:
                     if c.svc_wait_until < 0:
                         c.svc_wait_until = self.t + self.p.get("work_dwell_sec", 2.0)
+                    # v3.8: 매니퓰레이터 스테이션(OR1)은 시간이 아니라 하역 완료 이벤트가 게이트.
+                    #   Isaac 이 DOOR_CLOSED 를 보내야 출발 승인 -> 로봇이 문을 닫기 전에
+                    #   캡슐이 떠나는 물리적 모순을 제거한다. 다른 스테이션(OR2 콘보이 등)은
+                    #   매니퓰레이터가 없으므로 기존 시간 기반 그대로.
+                    elif self._needs_door_event(c, bid):
+                        if c.svc_door_closed:
+                            c.svc_blue = True
+                            self.log("BLUE_CMD", c.cid,
+                                     f"{bid} 하역 완료(DOOR_CLOSED) -> BLUE 이동 승인")
+                        elif self.t >= c.svc_wait_until + self.p.get("door_event_timeout_sec", 30.0):
+                            # 폴백: Isaac 이 응답하지 않아도 시연은 완주되어야 한다
+                            c.svc_blue = True
+                            self.log("BLUE_CMD", c.cid,
+                                     f"{bid} DOOR_CLOSED 미수신 {self.p.get('door_event_timeout_sec', 30.0):.0f}s "
+                                     f"-> 시간 기반 폴백 승인")
                     elif self.t >= c.svc_wait_until:
                         c.svc_blue = True
                         self.log("BLUE_CMD", c.cid, f"{bid} WORK 완료 -> BLUE 이동 승인")
