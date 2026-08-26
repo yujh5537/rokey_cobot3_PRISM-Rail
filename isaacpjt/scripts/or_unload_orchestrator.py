@@ -17,6 +17,7 @@ stage = omni.usd.get_context().get_stage()
 # ---------- 모션 모듈 ----------
 sys.path.insert(0, "/home/rokey/rokey_cobot3/isaacpjt/scripts")
 import m0609_motion as _M
+import or_pack_attach as _A
 
 # ── 기동 가드: Play 시작 자세를 접근 포즈로 강제 (씬 저장값과 무관하게 유령 누름 차단)
 _AP = CFG["teach_deg"].get("button_approach")
@@ -121,17 +122,19 @@ def _tick(e):
         S["state"] = "WAIT_OPEN"; S["t0"] = now
     elif st == "WAIT_OPEN" and door_state(cap) == "OPEN":
         publish_event({"capsule_id": CAP2ID[cap], "event": "DOOR_OPEN"})
-        S["queue"] = [("goto","grasp",2.5), ("grip",True,0.8),
+        S["queue"] = [("goto","grasp",2.5), ("grip",True,0.8), ("attach",None,0),
                       ("goto","camera",3.0), ("hold",None,2.0),
-                      ("goto","tray",3.0),   ("grip",False,0.8)]
+                      ("goto","tray",3.0),   ("release",None,0), ("grip",False,0.8)]
         S["state"] = "MOVE"
     elif st == "MOVE":
-        if robot_busy(): pass
+        if robot_busy() or _A.busy(): pass
         elif S["hold_until"] and now < S["hold_until"]: pass
         elif S["queue"]:
             kind, arg, dur = S["queue"].pop(0); S["hold_until"] = None
             if kind == "goto": robot_goto(arg, dur)
             elif kind == "grip": robot_grip(arg)
+            elif kind == "attach": _A.attach()
+            elif kind == "release": _A.release()
             elif kind == "hold":
                 S["hold_until"] = now + dur
                 print(f"[seq] hold {dur}s (camera capture point - step 10)")
