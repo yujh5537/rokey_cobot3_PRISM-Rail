@@ -214,38 +214,6 @@ VISION_POSE = [
 
 
 # ============================================================
-# VISION CAPTURE (step 10)
-#   VISION 포즈에서 라벨을 촬영해 OCR 노드로 보낸다.
-#   촬영 실패해도 시퀀스는 계속된다 — 하역 완주가 인식보다 우선.
-# ============================================================
-
-try:
-    import or_label_capture as _CAP
-    print("[CAP] label capture module linked")
-except Exception as _e:
-    _CAP = None
-    print("[CAP] capture module unavailable:", type(_e).__name__)
-
-
-def vision_capture():
-
-    print("")
-    print("========================================")
-    print("VISION CAPTURE")
-    print("========================================")
-
-    if _CAP is None:
-        print("[CAP] skipped (module unavailable)")
-        return
-
-    try:
-        _CAP.capture2(CAPSULE_ID, warmup=90, notify=True)
-        print("[CAP] capture requested for", CAPSULE_ID)
-    except Exception as e:
-        print("[CAP] capture failed (sequence continues):", e)
-
-
-# ============================================================
 # VALIDATE
 # ============================================================
 
@@ -878,23 +846,6 @@ add_pose(
 add_wait(
     VISION_HOLD_TIME,
     "VISION HOLD 1 SEC"
-)
-
-
-# ------------------------------------------------------------
-# CAPTURE + OCR  (step 10)
-#   앞의 1초 홀드로 팔 진동이 멎은 뒤 촬영한다 (모션블러 방지).
-# ------------------------------------------------------------
-
-add_action(
-    vision_capture,
-    "17-1 VISION CAPTURE"
-)
-
-
-add_wait(
-    2.0,
-    "17-2 OCR WAIT"
 )
 
 
