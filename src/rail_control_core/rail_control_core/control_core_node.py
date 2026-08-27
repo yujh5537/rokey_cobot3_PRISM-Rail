@@ -49,6 +49,7 @@ import yaml
 from rclpy.node import Node
 from rclpy.qos import (DurabilityPolicy, HistoryPolicy, QoSProfile,
                        ReliabilityPolicy)
+import threading
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
@@ -91,6 +92,12 @@ class ControlCoreNode(Node):
         self.declare_parameter("rate_hz", 30.0)
         self.declare_parameter("speed_scale", 1.0)
         self.declare_parameter("autostart", True)
+        # v3.8: Isaac OR 스테이션 이벤트 게이트.
+        #   ROS 구동 = 시연 구성이므로 기본 ON. 헤드리스 엔진 테스트는 기본 OFF라
+        #   회귀 기준값(A 73.70 / B 94.47)이 그대로 보존된다.
+        self.declare_parameter("station_event_enabled", True)
+        self.declare_parameter("door_event_timeout_sec", 30.0)
+        self.declare_parameter("station_event_blocks", ["B2-08"])   # B2-08 = OR1
 
         self.cfg_dir = Path(self.get_parameter("config_dir").value)
         mode = str(self.get_parameter("mode").value).upper()
@@ -114,6 +121,22 @@ class ControlCoreNode(Node):
 
         self.bridge = Bridge(mode=mode, autostart=autostart)
         self._reset_pub_state()
+
+        # v3.8: Isaac 이벤트를 엔진 파라미터로 주입
+        eng_p = self.bridge.eng.p
+        eng_p["station_event_enabled"] = bool(self.get_parameter("station_event_enabled").value)
+        eng_p["door_event_timeout_sec"] = float(self.get_parameter("door_event_timeout_sec").value)
+        eng_p["station_event_blocks"] = list(self.get_parameter("station_event_blocks").value)
+
+        # 이벤트는 ROS 콜백 스레드, tick 은 타이머 스레드 -> 큐 경유로 경합 회피
+        self._station_q = []
+        self._station_lock = threading.Lock()
+        self.create_subscription(String, "/or_station_event", self._on_station_msg, QOS_EVENT)
+        self.create_subscription(String, "/label_scan", self._on_label_msg, QOS_EVENT)
+        self.get_logger().info(
+            f"OR 스테이션 이벤트 게이트: {'ON' if eng_p['station_event_enabled'] else 'OFF'} "
+            f"| 대상 {eng_p['station_event_blocks']} | 폴백 {eng_p['door_event_timeout_sec']:.0f}s "
+            f"| 구독 /or_station_event, /label_scan")
 
         self.create_timer(1.0 / rate, self.on_tick)
 
@@ -150,6 +173,7 @@ class ControlCoreNode(Node):
     # ------------------------------------------------------------------
     def on_tick(self) -> None:
         # 배속: 타이머 1주기에 브리지를 여러 틱 돌리고 페이로드를 합칩니다.
+        self._drain_station_events()      # v3.8: Isaac 이벤트를 tick 전에 반영
         steps = max(1, round(float(self.get_parameter("speed_scale").value)))
         caps, blocks, events, sim_t = None, None, [], self.bridge.eng.t
         for _ in range(steps):
@@ -225,6 +249,66 @@ class ControlCoreNode(Node):
                 self.get_logger().info(f"[{ev}] {subj} {detail}")
             elif ev in PREEMPT_EVENTS and ev != "RESUME":
                 self.get_logger().warn(f"[선점] {ev} {self._p0_source()} → {subj} ({detail})")
+
+    # ------------------------------------------------------------------
+    # v3.8: Isaac OR 스테이션 연동
+    # ------------------------------------------------------------------
+    def _on_station_msg(self, msg: String) -> None:
+        """/or_station_event — DOOR_OPEN / DOOR_CLOSED (LABEL_READ 는 /label_scan 이 정본)"""
+        try:
+            d = json.loads(msg.data)
+            cid, ev = d.get("capsule_id"), d.get("event")
+            if not cid or not ev or ev == "LABEL_READ":
+                return
+            with self._station_lock:
+                self._station_q.append((cid, ev, d))
+        except Exception as e:
+            self.get_logger().warn(f"[/or_station_event] 파싱 실패: {e}")
+
+    def _on_label_msg(self, msg: String) -> None:
+        """/label_scan — OCR 노드의 라벨 인식 결과 (라벨 정보의 정본)"""
+        try:
+            d = json.loads(msg.data)
+            f = d.get("fields") or {}
+            cid = d.get("capsule_id")
+            if not cid:
+                return
+            payload = {"ok": d.get("ok"), "label_capsule": f.get("capsule_id"),
+                       "order_id": f.get("order_id"), "delivery_add": f.get("delivery_add"),
+                       "item_code": f.get("item_code"),
+                       "expiration_date": f.get("expiration_date"),
+                       "confidence": d.get("confidence"),
+                       "date_rule_ok": d.get("date_rule_ok")}
+            with self._station_lock:
+                self._station_q.append((cid, "LABEL_READ", payload))
+        except Exception as e:
+            self.get_logger().warn(f"[/label_scan] 파싱 실패: {e}")
+
+    def _drain_station_events(self) -> None:
+        """tick 직전에 큐를 비워 엔진에 주입 (엔진 접근은 단일 스레드로)"""
+        with self._station_lock:
+            if not self._station_q:
+                return
+            items, self._station_q = self._station_q, []
+        for cid, ev, payload in items:
+            try:
+                self.bridge.eng.on_station_event(cid, ev, payload)
+            except Exception as e:
+                self.get_logger().error(f"[스테이션 이벤트] {cid} {ev} 실패: {e}")
+                continue
+            if ev == "DOOR_CLOSED":
+                self.get_logger().info(f"🚪 [DOOR_CLOSED] {cid} 하역 완료 — 출발 게이트 개방")
+            elif ev == "DOOR_OPEN":
+                self.get_logger().info(f"🚪 [DOOR_OPEN] {cid} 캡슐 개방 — 하역 시작")
+            elif ev == "LABEL_READ":
+                lab = payload.get("label_capsule")
+                if lab and lab != cid:
+                    self.get_logger().error(
+                        f"🏷️ [LABEL_MISMATCH] 라벨 {lab} != 관제 {cid} — 오적재 의심")
+                else:
+                    self.get_logger().info(
+                        f"🏷️ [LABEL_READ] {cid} {payload.get('order_id')} / "
+                        f"{payload.get('delivery_add')} (conf {payload.get('confidence')})")
 
     def _snapshot(self, caps: list[dict] | None, sim_t: float) -> dict:
         """D(UI) 대시보드용 오더 집계. 늦게 붙어도 이것만 보면 현재 판이 완성됩니다."""
