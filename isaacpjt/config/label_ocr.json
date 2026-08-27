@@ -12,7 +12,7 @@
  "labels_json": "/home/rokey/isaac_or_station/textures/label_annotations.json",
  "expected_texture": "demo_0001.png",
  "tesseract_psm": 4,
- "value_col_x0": 0.42,
+ "value_col_x0": 0.4,
  "demo_capsule_id": "C05",
  "demo_texture": "/home/rokey/isaac_or_station/textures/demo_0001.png",
  "demo_json": "/home/rokey/isaac_or_station/textures/demo_annotations.json",
@@ -22,5 +22,11 @@
   "packaging_date": "packaging",
   "expiration_date": "expiration",
   "delivery_add": "delivery"
- }
+ },
+ "label_size_m": [
+  0.12,
+  0.075
+ ],
+ "expiry_days": 30,
+ "label_note": "2026-08-27 \uaddc\uaca9 120x75mm (\uad6c 75x38.4), \uc52c\uc5d0\uc11c 90\ub3c4 \ud68c\uc804 \ubd80\ucc29"
 }

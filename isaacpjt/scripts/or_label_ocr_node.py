@@ -8,9 +8,10 @@
 #   -> 4행은 잉크 경계 트림 후 좌(배송지)/우(캡슐ID) 분리 + 크롭 투표
 #   -> 빈 필드는 전체 이미지 변형 캐스케이드로 보완
 #
-# 검증된 작동 범위 (ocr_robust.py, 2026-08-26):
-#   yaw ±30도 OK / pitch 0도 필수(10도부터 붕괴) / 라벨 폭 700px 이상
-#   어두운 조명 OK, 강한 반사·모션블러 취약 -> 캡처는 완전 정지 후
+# 검증된 작동 범위 (ocr_robust.py, 2026-08-27 / 라벨 120x75mm):
+#   yaw ±30도 / pitch 15도까지 / 라벨 폭 550px 이상
+#   조명(어두움·반사)·경미한 블러 내성 확보. 심한 노이즈에서 capsule_id 취약.
+#   구 규격(75x38.4)은 pitch 0도 필수였으나 라벨 확대로 제약 해소.
 #
 # 핵심 설계 교훈:
 #   4행을 통째로 읽으면 'ST-OR1'의 S 때문에 5<->S 혼동이 열려 C05가 깨진다.
@@ -28,7 +29,7 @@ from datetime import datetime, timedelta
 import cv2, numpy as np, pytesseract
 
 CFG = json.load(open("/home/rokey/rokey_cobot3/isaacpjt/config/label_ocr.json"))
-LABEL_AR = 75.0 / 38.4                  # 1.953 — 라벨 실물 종횡비
+LABEL_AR = 120.0 / 75.0                 # 1.600 — 라벨 실물 종횡비 (2026-08-27 규격 변경)
 RECT_W = 1600
 RECT_H = int(RECT_W / LABEL_AR)         # 819
 FIELDS = ("item_code", "packaging_date", "expiration_date",
@@ -261,11 +262,11 @@ def parse(text):
 
 # ---------- 5) 자기 검증 · 정답지 ----------
 def rule_check(f):
-    """유통기한 = 포장일 + 60일 (생성 규칙) — 인식 결과의 자기 검증"""
+    """유통기한 = 포장일 + 30일 (생성 규칙) — 인식 결과의 자기 검증"""
     try:
         p = datetime.strptime(f["packaging_date"], "%Y-%m-%d %H:%M")
         e = datetime.strptime(f["expiration_date"], "%Y-%m-%d %H:%M")
-        return (e - p) == timedelta(days=60)
+        return (e - p) == timedelta(days=30)
     except Exception:
         return None
 
