@@ -47,9 +47,12 @@ def test_main_topology_untouched():
 
 
 def _run_full(mode: str):
-    """딥 연출이 끝나 브리지가 스스로 멈출 때까지 돌리고 관측치를 모은다."""
+    """딥 연출이 끝나 브리지가 스스로 멈출 때까지(또는 모드 A 데드락까지) 돌리고
+    관측치를 모은다. 모드 A(meet_pass OFF)는 C05/C08 이 단선에서 교착돼 완주하지
+    않으므로 DEADLOCK 이벤트가 나오면 거기서 멈춘다 — 콘보이 딥은 그 전에 끝난다."""
     b = Bridge(mode, autostart=True)
     evs, zmin, pre_blue_z = [], {}, {}
+    deadlocked = False
     for _ in range(12000):
         out = b.step()
         evs += [(e["sim_t"], e["event"], e["subject"]) for e in out["events"]]
@@ -61,16 +64,19 @@ def _run_full(mode: str):
             cap = b.eng.capsules[c["capsule_id"]]
             if not cap.svc_blue:
                 pre_blue_z[c["capsule_id"]] = max(pre_blue_z.get(c["capsule_id"], 0.0), cap.svc_s)
+        if any(ev == "DEADLOCK" for _, ev, _ in evs):
+            deadlocked = True
+            break
         if not b.running:
             break
     else:
         raise AssertionError("딥 연출이 끝나지 않음 — 승인 대기 교착 의심")
-    return b, evs, zmin, pre_blue_z
+    return b, evs, zmin, pre_blue_z, deadlocked
 
 
 def test_blue_is_not_automatic():
     """제어 규칙 ①③: 승인 전에는 WORK 를 절대 넘지 않고, 넘으려면 BLUE_CMD 가 선행해야 한다."""
-    b, evs, _, pre_blue_z = _run_full("B")
+    b, evs, _, pre_blue_z, _ = _run_full("B")
     work_s = T.SERVICE_GEO["B2-09"]["work_s"]
     for cid, s in pre_blue_z.items():
         assert s <= work_s + 1e-9, f"{cid}: 승인 없이 WORK({work_s})를 통과함 — BLUE 자동화 회귀"
@@ -85,24 +91,39 @@ def test_blue_is_not_automatic():
 
 
 def test_dip_reaches_operating_room_floor():
-    """연출의 핵심: 전원이 하단 z=11.0 까지 내려갔다가 복귀한다."""
-    for mode in ("A", "B"):
-        _, _, zmin, _ = _run_full(mode)
-        assert len(zmin) == 5
+    """연출의 핵심: OR 에 도착한 캡슐 전원이 하단 z=11.0 까지 내려갔다가 복귀한다.
+    모드 B 는 5대(콘보이 4 + O-1 공급 C05), 모드 A(meet_pass OFF)는 C05 가 단선
+    교착으로 OR1 에 못 가므로 콘보이 4대만 — 콘보이 딥은 데드락 선언 전에 완주한다."""
+    for mode, n_dip in (("A", 4), ("B", 5)):
+        _, _, zmin, _, deadlocked = _run_full(mode)
+        assert (mode == "A") == deadlocked, f"[{mode}] 데드락 기대={mode=='A'} 실제={deadlocked}"
+        assert len(zmin) == n_dip, f"[{mode}] 딥 수행 {len(zmin)} != {n_dip}"
         for cid, z in zmin.items():
             assert z == 11.0, f"[{mode}] {cid}: 최저 z={z} (하단 11.0 미도달)"
 
 
 def test_kpi_unaffected_by_dip():
     """설계 전제: 도착 판정은 레일 인계 시점 — 딥은 KPI 를 늦추지 않는다.
-    발행만 연출 종료까지 이어지므로 브리지 정지 시각은 SIM_DONE 보다 뒤다."""
-    for mode, makespan in (("A", 74.97), ("B", 86.77)):
-        b, evs, _, _ = _run_full(mode)
-        done = [t for t, ev, _ in evs if ev == "SIM_DONE"]
-        assert done, f"[{mode}] SIM_DONE 미발생"
-        mk = max(o.arrive_t for o in b.eng.orders.values())
-        assert abs(mk - makespan) <= 0.2, f"[{mode}] makespan {mk} != {makespan}"
-        last = max(t for t, ev, _ in evs if ev == "SERVICE_DONE")
-        assert last > done[0], f"[{mode}] 연출이 SIM_DONE 전에 끝남 — 발행 유지 로직 확인"
-        assert all(c.state == CapsuleState.REMOVED
-                   for c in b.eng.capsules.values() if c.svc_bid is None and c.order)
+    발행만 연출 종료까지 이어지므로 브리지 정지 시각은 SIM_DONE 보다 뒤다.
+    (모드 A 는 meet_pass OFF 로 완주하지 않으므로 SIM_DONE 이 없다 — 모드 B 만 검증)"""
+    b, evs, _, _, _ = _run_full("B")
+    done = [t for t, ev, _ in evs if ev == "SIM_DONE"]
+    assert done, "[B] SIM_DONE 미발생"
+    mk = max(o.arrive_t for o in b.eng.orders.values())
+    assert abs(mk - 86.77) <= 0.2, f"[B] makespan {mk} != 86.77"
+    last = max(t for t, ev, _ in evs if ev == "SERVICE_DONE")
+    assert last > done[0], "[B] 연출이 SIM_DONE 전에 끝남 — 발행 유지 로직 확인"
+    assert all(c.state == CapsuleState.REMOVED
+               for c in b.eng.capsules.values() if c.svc_bid is None and c.order)
+
+
+def test_mode_a_deadlocks_without_meet_pass():
+    """모드 A(FCFS 비교군)는 R13 교행 OFF 라 C05(O-1 공급)·C08(O-5 회수)이 단선에서
+    정면 교착 → DEADLOCK 이벤트가 나오고 완주하지 않는다. 대시보드 데드락 시연과 일치."""
+    b, evs, _, _, deadlocked = _run_full("A")
+    assert deadlocked, "모드 A 인데 데드락이 발생하지 않음 (meet_pass 강제 OFF 회귀)"
+    dl = [(t, s) for t, ev, s in evs if ev == "DEADLOCK"]
+    assert dl, "DEADLOCK 이벤트 미발행"
+    assert not any(ev == "SIM_DONE" for _, ev, _ in evs), "데드락인데 SIM_DONE 발생"
+    assert not b.running or any(
+        c.state.value == "YIELD_WAIT" for c in b.eng.capsules.values())
