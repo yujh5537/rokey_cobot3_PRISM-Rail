@@ -377,6 +377,16 @@ class Engine:
                 self.log("LABEL_READ", capsule_id,
                          f"라벨 인식 {'성공' if ok else '실패'} "
                          f"({(payload or {}).get('order_id')} / {(payload or {}).get('delivery_add')})")
+        elif event == "PACK_GRIPPED":
+            # v3.8.1: 화물 소유권이 캡슐 -> 로봇으로 넘어간 시점.
+            #   B 설계 규칙: DOOR_OPEN 은 작업 시작 허가일 뿐이고,
+            #   캡슐측 고정 해제는 반드시 이 이벤트 이후여야 한다
+            #   (그 전에 풀면 로봇이 잡기 전에 PhysX 가 팩을 날린다).
+            c.svc_pack_owner = "ROBOT"
+            self.log("PACK_GRIPPED", capsule_id, "화물 소유권 캡슐 -> 로봇")
+        elif event == "PACK_UNLOADED":
+            c.svc_pack_owner = "TRAY"
+            self.log("PACK_UNLOADED", capsule_id, "화물 트레이 적재 완료")
         else:
             self.log("STATION_EVENT", capsule_id, f"미정의 이벤트 {event}")
             return False

@@ -101,6 +101,11 @@ class Bridge:
             "forward": bool(c.fwd),
             "state": c.state.value,
             "order_id": c.order.oid if c.order else "",
+            # v3.8.2: 씬 연출용 우선순위. B 가 캡슐 바디 색을 이 값으로 칠한다
+            #   (0=P0 crimson / 1=P1 / 2=P2 / 3=P3 / 9=미배정).
+            #   이벤트가 아니라 매 프레임 상태로 보내는 이유: 이벤트를 놓치거나
+            #   늦게 구독해도 다음 프레임에 자동 복구된다.
+            "prio": (c.order.prio if c.order else 9),
         }
 
     @staticmethod

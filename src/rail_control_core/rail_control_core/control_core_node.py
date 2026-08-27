@@ -300,6 +300,10 @@ class ControlCoreNode(Node):
                 self.get_logger().info(f"🚪 [DOOR_CLOSED] {cid} 하역 완료 — 출발 게이트 개방")
             elif ev == "DOOR_OPEN":
                 self.get_logger().info(f"🚪 [DOOR_OPEN] {cid} 캡슐 개방 — 하역 시작")
+            elif ev == "PACK_GRIPPED":
+                self.get_logger().info(f"🤖 [PACK_GRIPPED] {cid} 화물 소유권 캡슐 → 로봇")
+            elif ev == "PACK_UNLOADED":
+                self.get_logger().info(f"📦 [PACK_UNLOADED] {cid} 트레이 적재 완료")
             elif ev == "LABEL_READ":
                 lab = payload.get("label_capsule")
                 if lab and lab != cid:

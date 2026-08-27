@@ -41,10 +41,20 @@ def test_capsule_payload_schema():
     assert len(caps) == 10
     for c in caps:
         # v3.2: 위치 진실 소스가 코어가 되면서 x/y/z 가 추가됨 (C 매핑표 §1)
+        # v3.8.2: prio 추가 (씬 캡슐 색 연출용, B 요청).
+        #   필드 추가는 하위 호환이라 기존 구독자는 무시하면 그만이지만,
+        #   /capsule_pose 는 B(씬)·D(UI) 공용 계약이므로 스키마를 여기서 고정해
+        #   변경이 조용히 지나가지 않게 한다.
         assert set(c) == {"capsule_id", "block_id", "pos_m", "forward",
-                          "state", "order_id", "x", "y", "z"}
+                          "state", "order_id", "prio", "x", "y", "z"}
         assert all(isinstance(c[k], (int, float)) for k in ("x", "y", "z"))
     # 콘보이 4대는 대기열 BB-08 에서 시작
+    for c in caps:
+        assert c["prio"] in (0, 1, 2, 3, 9), f"{c['capsule_id']}.prio = {c['prio']!r}"
+        # 오더가 없으면 미배정(9), 있으면 P0~P3
+        assert (c["prio"] == 9) == (c["order_id"] == ""), \
+            f"{c['capsule_id']}: order_id={c['order_id']!r} 인데 prio={c['prio']}"
+
     q = [c for c in caps if c["capsule_id"] in ("C01", "C02", "C03", "C04")]
     assert all(c["block_id"] == "BB-08" and c["state"] == "QUEUED" for c in q)
     # 디포 유휴 캡슐은 레일이 아니라 측면 도크 슬롯 좌표를 받는다
