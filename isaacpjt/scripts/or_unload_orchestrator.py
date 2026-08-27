@@ -74,6 +74,14 @@ _udp = _socket.socket(
 
 def publish_event(event_name):
 
+    # [타이밍 측정] Run 시점부터의 경과초를 이벤트마다 기록
+    try:
+        import builtins
+        if hasattr(builtins, "_timing_mark"):
+            builtins._timing_mark(event_name)
+    except Exception:
+        pass
+
     payload = {
         "capsule_id": CAPSULE_ID,
         "event": event_name,
@@ -1054,10 +1062,69 @@ add_action(
 
 
 # ============================================================
+# AUTO TRIGGER — 관제 /order_event 의 SERVICE_START(C05) 를 기다린다
+#   타이밍을 손으로 맞추지 않아도 되게 하는 장치.
+#   관제가 캡슐을 세운 뒤에 로봇이 움직이므로 순서가 물리적으로 자연스럽다.
+# ============================================================
+
+AUTO_TRIGGER = True          # False = 기존 수동 모드 (Run 즉시 시작)
+TRIGGER_EVENT = "SERVICE_START"
+TRIGGER_DELAY = 1.0          # 도착 후 여유 (초)
+
+_trig = {"seen": False, "t": None, "sock": None}
+
+if AUTO_TRIGGER:
+    # Isaac 안 rclpy.spin_once 는 Kit 이벤트 루프에서 콜백이 불리지 않는다(실측 2026-08-27).
+    #   -> 구독을 밖으로 빼고(or_trigger_relay.py) UDP 로 받는다.
+    try:
+        _trig["sock"] = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+        _trig["sock"].bind(("127.0.0.1", 47138))
+        _trig["sock"].setblocking(False)
+        print("[AUTO] UDP 47138 대기 - or_trigger_relay.py 가 떠 있어야 함")
+        print("[AUTO] 관제 " + TRIGGER_EVENT + "(" + CAPSULE_ID + ") 수신 시 시퀀스 시작")
+    except Exception as e:
+        print("[AUTO] UDP bind 실패 -> 수동 모드:", e)
+        AUTO_TRIGGER = False
+
+
+def _poll_trigger():
+    """매 프레임 호출 - UDP 로 트리거가 왔는지 확인 (논블로킹)"""
+    if _trig["sock"] is not None and not _trig["seen"]:
+        try:
+            while True:
+                data, _addr = _trig["sock"].recvfrom(4096)
+                d = json.loads(data.decode("utf-8"))
+                if (d.get("event") == TRIGGER_EVENT
+                        and d.get("subject") == CAPSULE_ID):
+                    _trig["seen"] = True
+                    _trig["t"] = __import__("time").time()
+                    print("")
+                    print("========================================")
+                    print("TRIGGER: 관제 " + TRIGGER_EVENT + " " + CAPSULE_ID
+                          + " 수신 (sim_t=" + str(d.get("sim_t")) + ")")
+                    print("========================================")
+                    break
+        except BlockingIOError:
+            pass
+        except Exception:
+            pass
+
+    if _trig["seen"] and not vg10_cycle.get("armed"):
+        import time as _t
+        if _t.time() - _trig["t"] >= TRIGGER_DELAY:
+            vg10_cycle["armed"] = True
+            print("")
+            print("========================================")
+            print("SEQUENCE ARMED - 시퀀스 시작")
+            print("========================================")
+
+
+# ============================================================
 # RUNTIME
 # ============================================================
 
 vg10_cycle = {
+    "armed": False,
     "index": 0,
     "active": False,
     "elapsed": 0.0,
@@ -1141,6 +1208,12 @@ def begin_motion(step):
 # ============================================================
 
 def on_vg10_cycle_update(event):
+
+    # [자동 트리거] 관제가 C05 를 스테이션에 세우기 전에는 시퀀스를 시작하지 않는다.
+    #   AUTO_TRIGGER=False 로 두면 기존처럼 Run 즉시 시작 (수동 모드).
+    if AUTO_TRIGGER and not vg10_cycle.get("armed"):
+        _poll_trigger()
+        return
 
     if vg10_cycle["index"] >= len(steps):
         return
