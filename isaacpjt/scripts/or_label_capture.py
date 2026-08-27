@@ -123,6 +123,8 @@ def preview3(dist=0.20):
     if _S["saved"] is None:
         _S["saved"] = xf.GetLocalTransformation()
         print("[cap] original transform saved")
+    else:
+        print("[cap] WARNING: 이전 저장본 유지 — restore() 를 먼저 호출하세요")
     fwd = cam_forward()
     cam = _wpos(CAM)
     pos = Gf.Vec3d(cam[0] + fwd[0]*dist, cam[1] + fwd[1]*dist, cam[2] + fwd[2]*dist)

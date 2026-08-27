@@ -341,9 +341,13 @@ def recognize(capsule_id, image_path, shrink=None, debug=False, _no_rotate=False
     #   실패했을 때만 도는 경로라 정상 케이스 비용은 0.
     if not all(f.get(k) for k in CORE) and rot == 0 and not _no_rotate:
         best = sum(1 for k in FIELDS if f.get(k))
-        for _rot, _code in ((90, cv2.ROTATE_90_COUNTERCLOCKWISE),
-                            (270, cv2.ROTATE_90_CLOCKWISE),
-                            (180, cv2.ROTATE_180)):
+        _ORDER = [(90, cv2.ROTATE_90_COUNTERCLOCKWISE),
+                  (270, cv2.ROTATE_90_CLOCKWISE),
+                  (180, cv2.ROTATE_180)]
+        _hint = CFG.get("rotation_hint", 0)      # 실측 각도를 먼저 시도 -> 재시도 비용 절감
+        if _hint:
+            _ORDER.sort(key=lambda x: 0 if x[0] == _hint else 1)
+        for _rot, _code in _ORDER:
             rimg = cv2.rotate(img, _code)
             tmp = os.path.join(DBG, "_rot_probe.png")
             os.makedirs(DBG, exist_ok=True)
