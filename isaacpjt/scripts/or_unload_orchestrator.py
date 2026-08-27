@@ -43,8 +43,11 @@ try:
     import rclpy
     from std_msgs.msg import String
 
+    # 브릿지(isaac_twin_m2_bridge)가 rclpy 컨텍스트 소유자다. 여기서 init 을 또 하면
+    # 브릿지 노드를 죽이므로, 컨텍스트가 없으면 UDP 전용으로 강등한다.
+    #   -> 브릿지를 먼저 Run 하는 것이 정본 순서 (큐시트 참조)
     if not rclpy.ok():
-        rclpy.init()
+        raise RuntimeError("rclpy context absent - run isaac_twin_m2_bridge.py first")
 
     _event_node = rclpy.create_node(
         "or_unload_orchestrator_b"
