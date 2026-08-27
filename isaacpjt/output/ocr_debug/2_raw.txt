@@ -1,0 +1,5 @@
+[item] STP-GEN
+[dates] 2026-06-0507:18
+2026-07-0507:18
+[order] 0-1
+[deliv] ['ST-OR1', 'ST-OR1', 'ST-OR1', 'ST-OR1', 'ST-OR1', 'ST-OR1']  [caps] ['C05', 'C05']

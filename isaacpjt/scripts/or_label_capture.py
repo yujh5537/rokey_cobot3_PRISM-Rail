@@ -130,3 +130,45 @@ def preview3(dist=0.20):
     xf.ClearXformOpOrder(); xf.AddTransformOp().Set(m)
     print(f"[cap] pack -> {[round(v,3) for v in pos]} (카메라 시선 {dist}m 앞)")
     print("      *** Ctrl+S 금지 *** 끝나면 restore()")
+
+
+# ---------- GUI 호환 캡처 (orchestrator.step 은 standalone 전용이라 사용 불가) ----------
+import numpy as _np
+_A2 = {"rp": None, "annot": None, "res": None}
+
+def _ensure_rp(res):
+    import omni.replicator.core as rep
+    if _A2["rp"] is None or _A2["res"] != res:
+        _A2["rp"] = rep.create.render_product(CAM, res)
+        _A2["annot"] = rep.AnnotatorRegistry.get_annotator("rgb")
+        _A2["annot"].attach([_A2["rp"]])
+        _A2["res"] = res
+        print(f"[cap] render product {res[0]}x{res[1]} attached")
+
+def capture2(tag="C05", res=None, warmup=12, notify=True):
+    """카메라 1장 촬영 -> PNG 저장 -> OCR 노드에 UDP 통지 (비동기)"""
+    import asyncio, omni.kit.app
+    from PIL import Image
+    res = tuple(res or RES)
+    _ensure_rp(res)
+
+    async def _go():
+        app = omni.kit.app.get_app()
+        for _ in range(warmup):
+            await app.next_update_async()
+        data = _A2["annot"].get_data()
+        if data is None or len(data) == 0:
+            print("[cap] ERROR: empty frame"); return None
+        arr = _np.array(data)
+        if arr.ndim == 3 and arr.shape[2] == 4:
+            arr = arr[:, :, :3]
+        path = os.path.join(OUT, f"{tag}_{time.strftime('%H%M%S')}.png")
+        Image.fromarray(arr.astype(_np.uint8)).save(path)
+        print(f"[cap] saved: {path} shape={arr.shape}")
+        if notify:
+            _udp.sendto(json.dumps({"capsule_id": tag, "image": path}).encode(),
+                        ("127.0.0.1", PORT))
+            print(f"[cap] notified OCR node (UDP {PORT})")
+        return path
+
+    return asyncio.ensure_future(_go())

@@ -28,5 +28,7 @@
   0.075
  ],
  "expiry_days": 30,
- "label_note": "2026-08-27 \uaddc\uaca9 120x75mm (\uad6c 75x38.4), \uc52c\uc5d0\uc11c 90\ub3c4 \ud68c\uc804 \ubd80\ucc29"
+ "label_note": "2026-08-27 \uaddc\uaca9 120x75mm (\uad6c 75x38.4), \uc52c\uc5d0\uc11c 90\ub3c4 \ud68c\uc804 \ubd80\ucc29",
+ "rotation_hint": 0,
+ "rotation_note": "\uc2e4\uc81c \ucea1\ucc98\uc5d0\uc11c \ud655\uc778\ub41c \uac01\ub3c4\ub97c \ub123\uc73c\uba74 \uadf8 \uac01\ub3c4\ub97c \uba3c\uc800 \uc2dc\ub3c4\ud574 1.5s \ub0b4 \uc644\ub8cc. 0=\uc6d0\ubcf8"
 }

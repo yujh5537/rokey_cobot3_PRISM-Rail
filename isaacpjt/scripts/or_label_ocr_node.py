@@ -285,7 +285,7 @@ def ground_truth(fname=None):
     return None
 
 # ---------- 6) 인식 본체 ----------
-def recognize(capsule_id, image_path, shrink=None, debug=False):
+def recognize(capsule_id, image_path, shrink=None, debug=False, _no_rotate=False):
     img = cv2.imread(image_path)
     if img is None:
         return {"capsule_id": capsule_id, "event": "LABEL_READ", "ok": False,
@@ -296,6 +296,7 @@ def recognize(capsule_id, image_path, shrink=None, debug=False):
     t0 = time.time()
 
     rect, quad = rectify(img)
+    rot = 0
     if rect is not None:
         base, mode = rect, "rectified"
     else:
@@ -335,12 +336,34 @@ def recognize(capsule_id, image_path, shrink=None, debug=False):
             if all(f[k] for k in FIELDS):
                 break
 
+    # 라벨은 팩에 90도 회전 부착이라 카메라에 누워/뒤집혀 보일 수 있다.
+    #   각도는 종횡비로 못 가린다(180도는 1.6:1 그대로) -> 실제로 읽어보고 판정한다.
+    #   실패했을 때만 도는 경로라 정상 케이스 비용은 0.
+    if not all(f.get(k) for k in CORE) and rot == 0 and not _no_rotate:
+        best = sum(1 for k in FIELDS if f.get(k))
+        for _rot, _code in ((90, cv2.ROTATE_90_COUNTERCLOCKWISE),
+                            (270, cv2.ROTATE_90_CLOCKWISE),
+                            (180, cv2.ROTATE_180)):
+            rimg = cv2.rotate(img, _code)
+            tmp = os.path.join(DBG, "_rot_probe.png")
+            os.makedirs(DBG, exist_ok=True)
+            cv2.imwrite(tmp, rimg)
+            r2 = recognize(capsule_id, tmp, None, False, _no_rotate=True)
+            got = sum(1 for k in FIELDS if r2["fields"].get(k))
+            if r2["ok"] or got > best:
+                f, best, rot = r2["fields"], got, _rot
+                mode = f"{r2['detect_mode']}_rot{_rot}"
+                used = r2["variants_used"] + [f"rotated{_rot}"]
+                conf, grid = r2["confidence"], r2["grid"]
+                if r2["ok"]:
+                    break
+
     res = {
         "capsule_id": capsule_id, "event": "LABEL_READ",
         "ok": all(f.get(k) for k in CORE),
         "fields": f,
         "label_matches_capsule": (f.get("capsule_id") == capsule_id),
-        "detect_mode": mode, "quad": quad, "grid": grid, "variants_used": used,
+        "detect_mode": mode, "quad": quad, "rotation": rot, "grid": grid, "variants_used": used,
         "confidence": conf, "date_rule_ok": rule_check(f),
         "image": image_path, "ocr_ms": int((time.time()-t0)*1000),
     }

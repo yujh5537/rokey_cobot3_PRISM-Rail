@@ -1,0 +1,14 @@
+[item] STP-GEN
+[dates] 2026-06-0507:18
+2026-08-0407:18
+[deliv] ['ST-OR1', 'ST-OR1', 'ST-OR1', 'ST-OR1', 'ST-OR1', 'ST-OR1']  [caps] ['C05', 'C05']
+
+[val/psm4]
+STP-GEN
+
+2026-06-05 07:18
+2026-08-04 07:18
+
+O-1
+
+ST-OR1 / CO5
