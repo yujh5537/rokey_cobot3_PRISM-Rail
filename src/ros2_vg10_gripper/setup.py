@@ -15,7 +15,12 @@ setup(
         (f"share/{package_name}", ["package.xml"]),
         # launch files, params, etc.
         (f"share/{package_name}/launch", glob("launch/*.launch.py")),
-        (f"share/{package_name}/urdf", glob("urdf/*.xacro")),
+        (f"share/{package_name}/urdf", glob("urdf/*.xacro") + glob("urdf/*.urdf")),
+        (f"share/{package_name}/urdf/vg10", glob("urdf/vg10/*.usd")),
+        (
+            f"share/{package_name}/urdf/vg10/configuration",
+            glob("urdf/vg10/configuration/*.usd"),
+        ),
         (f"share/{package_name}/meshes", glob("meshes/*.stl")),
     ],
     install_requires=["setuptools"],
