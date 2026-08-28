@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=의료 레일 관제 대시보드
+Comment=localhost로 대시보드를 열어 마이크 권한이 매번 다시 물어보지 않게 함
+Exec=/home/rokey/cobot3_ws/medical-rail-twin/rail_ui/start_dashboard.sh
+Icon=web-browser
+Terminal=false
+Categories=Utility;

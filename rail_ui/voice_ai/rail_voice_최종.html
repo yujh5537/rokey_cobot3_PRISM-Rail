@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 음성 관제 비서 베리아 · 어젯밤 일 브리핑</title>
+<style>
+  :root {
+    --bg:#0b0f17; --panel:#121824; --panel-hover:#172033; --border:#1f293d;
+    --text:#e6edf3; --dim:#8b949e; --p0:#f85149; --p1:#d29922; --p2:#3fb950;
+    --p3:#58a6ff; --accent:#a371f7; --hud-bg:rgba(18,24,36,0.92);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    min-height:100vh;padding:32px 20px 80px;line-height:1.55;
+  }
+  .wrap{max-width:980px;margin:0 auto}
+
+  /* ═══════════════════════════════════════════════════════════
+     📱 스마트폰 AI 음성 비서 HUD 팝업 (Siri / Galaxy AI Style)
+     ═══════════════════════════════════════════════════════════ */
+  .veria-hud-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(5, 8, 14, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .veria-hud-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .veria-hud-card {
+    background: transparent;
+    border: none;
+    border-radius: 28px;
+    padding: 24px 20px 20px;
+    width: 92%;
+    max-width: 580px;
+    box-shadow: none;
+    text-align: center;
+    position: relative;
+    transform: scale(0.92) translateY(20px);
+    transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .veria-hud-backdrop.active .veria-hud-card {
+    transform: scale(1) translateY(0);
+  }
+
+  /* 🌟 화려한 홀로그램 AI 글로우 오브 (Glow Orb) */
+  .veria-orb-container {
+    width: 110px;
+    height: 110px;
+    margin: 0 auto 8px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .veria-orb {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #e0b0ff 0%, #a371f7 40%, #58a6ff 75%, #1f6feb 100%);
+    box-shadow: 0 0 25px rgba(163, 113, 247, 0.4), 0 0 45px rgba(88, 166, 255, 0.25);
+    position: relative;
+    z-index: 2;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  .veria-orb-wave {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 2px solid rgba(163, 113, 247, 0.6);
+    opacity: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* 🔊 베리아가 음성으로 말하고 있을 때(speaking)만 활성화되는 애니메이션 */
+  .veria-orb-container.speaking .veria-orb {
+    box-shadow: 0 0 35px rgba(163, 113, 247, 0.9), 0 0 70px rgba(88, 166, 255, 0.6);
+    animation: orbPulse 1.8s ease-in-out infinite alternate;
+  }
+  .veria-orb-container.speaking .veria-orb-wave {
+    animation: orbWave 1.8s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+  }
+  .veria-orb-container.speaking .veria-orb-wave:nth-child(2) {
+    animation-delay: 0.6s;
+  }
+
+  @keyframes orbPulse {
+    0% { transform: scale(0.92); filter: hue-rotate(0deg) brightness(1); }
+    50% { transform: scale(1.08); filter: hue-rotate(25deg) brightness(1.25); }
+    100% { transform: scale(0.92); filter: hue-rotate(0deg) brightness(1); }
+  }
+  @keyframes orbWave {
+    0% { width: 80px; height: 80px; opacity: 0.9; }
+    100% { width: 145px; height: 145px; opacity: 0; }
+  }
+
+  .veria-hud-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.3px;
+    margin-bottom: 2px;
+  }
+  .veria-hud-status {
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .veria-hud-status::before {
+    content: '';
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.2s infinite ease-in-out;
+  }
+  @keyframes blink { 0%, 100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .veria-dialog-box {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 16px 20px;
+    text-align: center;
+    margin-top: 14px;
+    margin-bottom: 18px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .veria-user-line {
+    font-size: 14px;
+    color: #8b949e; /* 브리핑 중 / 기본 상태: 회색 */
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(255,255,255,0.08);
+    text-align: center;
+    transition: color 0.2s ease;
+  }
+  .veria-user-line.listening {
+    color: #ffffff !important; /* 음성 인식 중일 때: 선명한 흰색 */
+    font-weight: 600;
+  }
+  .veria-answer-line {
+    font-size: 16px;
+    line-height: 1.5;
+    color: #f0f6fc;
+    font-weight: 600;
+    text-align: center;
+  }
+  .veria-answer-line b { color: var(--accent); }
+
+  .veria-hud-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  /* 기존 레이아웃 스타일 */
+  .eyebrow{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:12px;color:var(--dim);margin-bottom:12px;
+    text-transform:uppercase;letter-spacing:1px
+  }
+  .eyebrow b{color:var(--p3);font-weight:600}
+  h1{font-size:32px;font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;line-height:1.25}
+  h1 em{font-style:normal;color:var(--accent)}
+
+  .console{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:16px;padding:18px 22px;margin:24px 0 16px;
+    display:flex;align-items:center;gap:18px;
+  }
+  .mic{
+    width:56px;height:56px;border-radius:50%;
+    background:linear-gradient(135deg, #232d42 0%, #171d2b 100%);
+    border:2px solid var(--accent);color:var(--accent);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;transition:all .2s;position:relative;
+  }
+  .mic:hover{transform:scale(1.05);background:var(--accent);color:#fff}
+  .mic.live{
+    background:var(--p0);color:#fff;border-color:var(--p0);
+    box-shadow:0 0 0 6px rgba(248,81,73,.25);
+    animation:pulse 1.6s infinite
+  }
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 4px rgba(248,81,73,.25)}
+    50%{box-shadow:0 0 0 12px rgba(248,81,73,.0)}
+  }
+  .mic svg{width:26px;height:26px}
+  .heard{flex:1;min-width:0}
+  .heard .lbl{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:2px}
+  .heard .txt{font-size:15px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .heard .txt.idle{color:var(--dim)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{
+    background:rgba(255,255,255,.05);border:1px solid var(--border);
+    color:var(--dim);padding:6px 12px;border-radius:20px;
+    font-size:12px;cursor:pointer;transition:all .15s;
+  }
+  .chip:hover{color:#fff;border-color:var(--accent);background:rgba(163,113,247,.1)}
+  .note{font-size:12px;color:var(--dim);margin-bottom:24px;padding:0 4px}
+  .note code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;color:var(--text)}
+
+  .brief{
+    background:linear-gradient(180deg, #161e2e 0%, var(--panel) 100%);
+    border:1px solid var(--border);border-left:4px solid var(--accent);
+    border-radius:14px;padding:22px 26px;margin-bottom:28px;
+    min-height:110px;display:flex;flex-direction:column;justify-content:center;
+  }
+  .brief p{font-size:15px;line-height:1.75;color:var(--text);margin-bottom:8px}
+  .brief p:last-child{margin-bottom:0}
+  .brief p.placeholder{color:var(--dim);font-style:italic}
+  .brief p.now{color:#fff;font-weight:600}
+  .brief p.said{color:var(--dim)}
+  .brief b{color:#fff}
+  .brief .badge{
+    display:inline-block;padding:1px 7px;border-radius:4px;
+    font-size:11px;font-weight:700;margin:0 3px;vertical-align:middle;
+  }
+  .badge.p0{background:rgba(248,81,73,.18);color:var(--p0);border:1px solid var(--p0)}
+  .badge.p1{background:rgba(210,153,34,.18);color:var(--p1);border:1px solid var(--p1)}
+  .badge.p2{background:rgba(63,185,80,.18);color:var(--p2);border:1px solid var(--p2)}
+  .badge.p3{background:rgba(88,166,255,.18);color:var(--p3);border:1px solid var(--p3)}
+
+  .tl{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:14px;padding:20px 22px;margin-bottom:24px;position:relative;
+  }
+  .tl-head{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:14px;font-size:13px;font-weight:700
+  }
+  .tl-head span:last-child{font-weight:400;color:var(--dim);font-size:11px}
+  .lanes{display:flex;flex-direction:column;gap:10px;position:relative}
+  .lane{display:flex;align-items:center;gap:12px}
+  .lane-tag{
+    width:74px;font-size:11px;font-weight:700;
+    padding:3px 8px;border-radius:6px;text-align:center;flex-shrink:0
+  }
+  .lane-tag.p0{background:rgba(248,81,73,.15);color:var(--p0)}
+  .lane-tag.p1{background:rgba(210,153,34,.15);color:var(--p1)}
+  .lane-tag.p2{background:rgba(63,185,80,.15);color:var(--p2)}
+  .lane-tag.p3{background:rgba(88,166,255,.15);color:var(--p3)}
+  .lane-bar{
+    flex:1;height:24px;background:rgba(255,255,255,.02);
+    border-radius:6px;position:relative;overflow:visible;
+  }
+  .mark{
+    position:absolute;top:3px;bottom:3px;border-radius:4px;
+    opacity:.75;cursor:pointer;transition:all .2s;
+  }
+  .mark:hover, .mark.hot{
+    opacity:1;transform:scaleY(1.3);z-index:10;
+    box-shadow:0 0 10px currentColor
+  }
+  .mark.p0{background:var(--p0);color:var(--p0)}
+  .mark.p1{background:var(--p1);color:var(--p1)}
+  .mark.p2{background:var(--p2);color:var(--p2)}
+  .mark.p3{background:var(--p3);color:var(--p3)}
+  .hours{
+    display:flex;justify-content:space-between;
+    margin-top:8px;padding-left:86px;font-size:10px;color:var(--dim)
+  }
+  .scrub{
+    position:absolute;top:40px;bottom:32px;width:2px;
+    background:var(--accent);pointer-events:none;transition:left .3s;
+    box-shadow:0 0 8px var(--accent);display:none
+  }
+  .scrub.on{display:block}
+
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+  .card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;padding:14px 16px;
+  }
+  .card .k{font-size:11px;color:var(--dim);text-transform:uppercase;margin-bottom:4px}
+  .card .v{font-size:24px;font-weight:800;letter-spacing:-0.5px}
+  .card .s{font-size:11px;color:var(--dim);margin-top:2px}
+  .card.p0 .v{color:var(--p0)}
+  .card.p1 .v{color:var(--p1)}
+  .card.p2 .v{color:var(--p2)}
+  .card.p3 .v{color:var(--p3)}
+
+  .flags{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:14px;padding:18px 22px;margin-bottom:24px;
+  }
+  .flags h2{font-size:13px;font-weight:700;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
+  .flag-item{
+    display:flex;align-items:flex-start;gap:12px;
+    padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:13px
+  }
+  .flag-item:last-child{border-bottom:none;padding-bottom:0}
+  .flag-dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0}
+  .flag-dot.p0{background:var(--p0);box-shadow:0 0 6px var(--p0)}
+  .flag-dot.p1{background:var(--p1)}
+  .flag-dot.p2{background:var(--p2)}
+  .flag-body b{color:#fff}
+  .flag-body span{color:var(--dim);font-size:12px;display:block;margin-top:2px}
+
+  footer{text-align:center;font-size:11px;color:var(--dim);padding-top:20px;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<!-- 📱 스마트폰 비서 HUD 팝업 (VERIA Siri Style HUD) -->
+<div class="veria-hud-backdrop" id="veria-hud">
+  <div class="veria-hud-card">
+    <div class="veria-orb-container">
+      <div class="veria-orb-wave"></div>
+      <div class="veria-orb-wave"></div>
+      <div class="veria-orb"></div>
+    </div>
+
+    <div class="veria-hud-title">AI 관제 비서 베리아</div>
+    <div class="veria-hud-status" id="veria-status" style="display:none;"></div>
+
+    <div class="veria-dialog-box">
+      <div class="veria-user-line" id="veria-user-text">말씀해 주세요…</div>
+      <div class="veria-answer-line" id="veria-ai-text">
+        네, <b>베리아</b>입니다. 어떤 정보를 브리핑해 드릴까요?
+      </div>
+    </div>
+
+    <div class="veria-hud-chips" id="veria-hud-chips">
+      <button class="chip" data-stop="1">중지</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="eyebrow"><span>AI 음성 관제 비서 베리아 · 관제 코어 v3.1</span><b id="stamp">2026-08-25 07:00 KST</b></div>
+  <h1>어젯밤, 레일에서<br><em>무슨 일이 있었나</em></h1>
+
+  <div class="console">
+    <button class="mic" id="mic" aria-label="음성으로 질문하기">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/>
+      </svg>
+    </button>
+    <div class="heard">
+      <div class="lbl">인식된 말</div>
+      <div class="txt idle" id="heard">"베리아, 어제 일 브리핑해줘"라고 말씀해 보세요 (상시 대기 중 🎙️)</div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="note" id="note"></div>
+
+  <div class="brief" id="brief">
+    <p class="placeholder">브리핑을 요청하면 여기에 표시되고, 동시에 음성으로 읽어 드립니다.</p>
+  </div>
+
+  <div class="tl">
+    <div class="tl-head"><span id="tl-date-label">오더 타임라인</span><span id="tlcount"></span></div>
+    <div class="lanes" id="lanes"></div>
+    <div class="hours" id="hours"></div>
+  </div>
+
+  <div class="grid" id="stats"></div>
+
+  <div class="flags">
+    <h2>지표가 잡아낸 것</h2>
+    <div id="flaglist"></div>
+  </div>
+
+  <footer>
+    목업 데이터 · 집계는 이벤트 로그에서 규칙 기반 계산, 문장만 생성<br>
+    음성 입력·출력 = Web Speech API (Chrome / Edge 권장, ko-KR)
+  </footer>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   1. 목업 이벤트 로그 — 실제로는 /order_event 토픽 → 시계열 DB
+   ═══════════════════════════════════════════════════════════ */
+const G = {P0:'--p0', P1:'--p1', P2:'--p2', P3:'--p3'};
+const L = [
+  {id:'P0', label:'P0 수혈혈액'},
+  {id:'P1', label:'P1 응급약품'},
+  {id:'P2', label:'P2 조제·멸균'},
+  {id:'P3', label:'P3 회수·정기'}
+];
+
+const EV = [
+  // P0 — Code Crimson
+  {id:'O-101',t:'13:45',g:'P0',item:'응급 수혈혈액',from:'혈액은행',to:'수술실1·2',cap:'C01~C04',n:4,sec:41.5,due:60},
+  {id:'O-118',t:'16:03',g:'P0',item:'응급 수혈혈액',from:'혈액은행',to:'ICU',cap:'C03',n:1,sec:38.2,due:60,flag:'accel'},
+  // P1 — 응급약품
+  {id:'O-072',t:'09:12',g:'P1',item:'응급약품',from:'약제부',to:'ICU',cap:'C06',n:1,sec:21.4,due:180},
+  {id:'O-089',t:'11:38',g:'P1',item:'응급약품',from:'약제부',to:'수술실1',cap:'C08',n:1,sec:24.8,due:180},
+  {id:'O-114',t:'15:50',g:'P1',item:'응급약품',from:'약제부',to:'ICU',cap:'C07',n:1,sec:19.6,due:180},
+  {id:'O-141',t:'22:07',g:'P1',item:'응급약품',from:'약제부',to:'ICU',cap:'C02',n:1,sec:23.1,due:180},
+  // P2 — 항암제·TPN
+  {id:'O-061',t:'08:30',g:'P2',item:'항암제·TPN',from:'주사조제실',to:'ICU',cap:'C05',n:1,sec:19.0,due:600},
+  {id:'O-062',t:'08:32',g:'P2',item:'항암제·TPN',from:'주사조제실',to:'ICU',cap:'C09',n:1,sec:18.4,due:600},
+  {id:'O-081',t:'10:15',g:'P2',item:'항암제·TPN',from:'주사조제실',to:'ICU',cap:'C05',n:1,sec:21.7,due:600},
+  {id:'O-098',t:'13:00',g:'P2',item:'항암제·TPN',from:'주사조제실',to:'ICU',cap:'C06',n:1,sec:20.2,due:600},
+  {id:'O-105',t:'14:00',g:'P2',item:'항암제·TPN (예약)',from:'주사조제실',to:'ICU',cap:'C09',n:1,sec:39.6,due:600},
+  {id:'O-106',t:'14:02',g:'P2',item:'항암제·TPN (예약)',from:'주사조제실',to:'ICU',cap:'C10',n:1,sec:44.3,due:600,flag:'shelf'},
+  {id:'O-124',t:'17:20',g:'P2',item:'항암제·TPN',from:'주사조제실',to:'ICU',cap:'C05',n:1,sec:640.0,due:600,flag:'sla'},
+  {id:'O-133',t:'19:40',g:'P2',item:'항암제·TPN',from:'주사조제실',to:'ICU',cap:'C08',n:1,sec:18.9,due:600},
+  {id:'O-146',t:'23:10',g:'P2',item:'항암제·TPN',from:'주사조제실',to:'ICU',cap:'C02',n:1,sec:17.8,due:600},
+  // P2 — 멸균 기구팩
+  {id:'O-055',t:'07:45',g:'P2',item:'멸균 기구팩',from:'CSR',to:'수술실1',cap:'C04',n:1,sec:26.1,due:600},
+  {id:'O-068',t:'09:00',g:'P2',item:'멸균 기구팩',from:'CSR',to:'수술실2',cap:'C07',n:1,sec:27.9,due:600},
+  {id:'O-084',t:'10:30',g:'P2',item:'멸균 기구팩',from:'CSR',to:'수술실1',cap:'C04',n:1,sec:25.4,due:600},
+  {id:'O-094',t:'12:15',g:'P2',item:'멸균 기구팩',from:'CSR',to:'수술실2',cap:'C10',n:1,sec:28.8,due:600},
+  {id:'O-100',t:'13:30',g:'P2',item:'멸균 기구팩',from:'CSR',to:'수술실1',cap:'C07',n:1,sec:33.2,due:600},
+  {id:'O-110',t:'15:00',g:'P2',item:'멸균 기구팩',from:'CSR',to:'수술실2',cap:'C06',n:1,sec:31.0,due:600},
+  {id:'O-129',t:'18:20',g:'P2',item:'멸균 기구팩',from:'CSR',to:'수술실1',cap:'C01',n:1,sec:29.5,due:600},
+  {id:'O-138',t:'21:00',g:'P2',item:'멸균 기구팩',from:'CSR',to:'수술실2',cap:'C03',n:1,sec:30.1,due:600},
+  // P3 — 혈액·검체
+  {id:'O-051',t:'07:15',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C01',n:1,sec:18.2,due:1800},
+  {id:'O-064',t:'08:45',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C03',n:1,sec:19.4,due:1800},
+  {id:'O-078',t:'10:00',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C02',n:1,sec:22.0,due:1800},
+  {id:'O-087',t:'11:20',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C08',n:1,sec:20.1,due:1800},
+  {id:'O-096',t:'12:45',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C04',n:1,sec:19.8,due:1800},
+  {id:'O-103',t:'13:55',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C05',n:1,sec:18.9,due:1800},
+  {id:'O-112',t:'15:30',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C09',n:1,sec:21.3,due:1800},
+  {id:'O-121',t:'16:45',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C01',n:1,sec:23.4,due:1800},
+  {id:'O-127',t:'18:00',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C06',n:1,sec:20.7,due:1800},
+  {id:'O-135',t:'20:15',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C07',n:1,sec:19.1,due:1800},
+  {id:'O-143',t:'22:30',g:'P3',item:'혈액·검체',from:'병동',to:'진단검사의학과',cap:'C03',n:1,sec:18.5,due:1800},
+  // P3 — 린넨·세탁
+  {id:'O-058',t:'08:00',g:'P3',item:'린넨·세탁',from:'병동',to:'세탁실',cap:'C09',n:1,sec:35.0,due:1800},
+  {id:'O-075',t:'09:30',g:'P3',item:'린넨·세탁',from:'병동',to:'세탁실',cap:'C10',n:1,sec:37.2,due:1800},
+  {id:'O-091',t:'12:00',g:'P3',item:'린넨·세탁',from:'병동',to:'세탁실',cap:'C06',n:1,sec:34.1,due:1800},
+  {id:'O-108',t:'14:30',g:'P3',item:'린넨·세탁',from:'병동',to:'세탁실',cap:'C01',n:1,sec:36.5,due:1800},
+  {id:'O-123',t:'17:00',g:'P3',item:'린넨·세탁',from:'병동',to:'세탁실',cap:'C08',n:1,sec:38.9,due:1800},
+  {id:'O-131',t:'19:00',g:'P3',item:'린넨·세탁',from:'병동',to:'세탁실',cap:'C04',n:1,sec:33.8,due:1800},
+  {id:'O-148',t:'23:45',g:'P3',item:'린넨·세탁',from:'병동',to:'세탁실',cap:'C05',n:1,sec:32.4,due:1800}
+];
+
+/* ═══════════════════════════════════════════════════════════
+   2. 대한민국 서울 (Asia/Seoul, KST) 기준 날짜 및 시간 계산
+   ═══════════════════════════════════════════════════════════ */
+function getSeoulYesterdayInfo(){
+  const now = new Date();
+  const dtf = new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', second: 'numeric',
+    hour12: false
+  });
+  const parts = dtf.formatToParts(now);
+  const m = {};
+  parts.forEach(p => { m[p.type] = p.value; });
+
+  const sYear = parseInt(m.year, 10);
+  const sMonth = parseInt(m.month, 10);
+  const sDay = parseInt(m.day, 10);
+
+  const yesterday = new Date(Date.UTC(sYear, sMonth - 1, sDay - 1));
+  const yYear = yesterday.getUTCFullYear();
+  const yMonth = yesterday.getUTCMonth() + 1;
+  const yDay = yesterday.getUTCDate();
+
+  return {
+    spoken: `${yMonth}월 ${yDay}일`,
+    yyyymmdd: `${yYear}-${String(yMonth).padStart(2, '0')}-${String(yDay).padStart(2, '0')}`,
+    todayKST: `${sYear}-${String(sMonth).padStart(2, '0')}-${String(sDay).padStart(2, '0')} ${String(m.hour).padStart(2, '0')}:${String(m.minute).padStart(2, '0')} KST`
+  };
+}
+
+const min = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+
+/* 타임라인 렌더 */
+const lanesEl = document.getElementById('lanes');
+const hoursEl = document.getElementById('hours');
+const marks = {};
+
+L.forEach(l => {
+  const row = document.createElement('div');
+  row.className = 'lane';
+  row.innerHTML = `<div class="lane-tag ${l.id.toLowerCase()}">${l.label}</div><div class="lane-bar" id="bar-${l.id}"></div>`;
+  lanesEl.appendChild(row);
+});
+
+for (let h=0; h<=24; h+=3){
+  const s = document.createElement('span');
+  s.textContent = `${String(h).padStart(2,'0')}:00`;
+  hoursEl.appendChild(s);
+}
+
+const scrub = document.createElement('div');
+scrub.className = 'scrub';
+lanesEl.appendChild(scrub);
+
+EV.forEach(e => {
+  const bar = document.getElementById(`bar-${e.g}`);
+  const pct = (min(e.t) / 1440) * 100;
+  const m = document.createElement('div');
+  m.className = `mark ${e.g.toLowerCase()}`;
+  m.style.left = `${pct}%`;
+  m.style.width = '6px';
+  m.title = `[${e.g}] ${e.t} · ${e.item} (${e.sec}s)`;
+  bar.appendChild(m);
+  marks[e.id] = m;
+});
+
+const tlDateInfo = getSeoulYesterdayInfo();
+document.getElementById('tlcount').textContent = `총 ${EV.length}건`;
+document.getElementById('tl-date-label').textContent = `어제 (${tlDateInfo.yyyymmdd}) 오더 타임라인`;
+
+/* 통계 카드 */
+const p0Count = EV.filter(e=>e.g==='P0').length;
+const p1Count = EV.filter(e=>e.g==='P1').length;
+const p2Count = EV.filter(e=>e.g==='P2').length;
+const p3Count = EV.filter(e=>e.g==='P3').length;
+
+document.getElementById('stats').innerHTML = `
+  <div class="card p0"><div class="k">Code Crimson</div><div class="v">${p0Count}건</div><div class="s">평균 39.8초 · 전건 목표 달성</div></div>
+  <div class="card p1"><div class="k">P1 응급약품</div><div class="v">${p1Count}건</div><div class="s">평균 22.2초 · 100% 준수</div></div>
+  <div class="card p2"><div class="k">P2 조제·멸균</div><div class="v">${p2Count}건</div><div class="s">1건 지연 (ICU 반출 대기)</div></div>
+  <div class="card p3"><div class="k">P3 회수·정기</div><div class="v">${p3Count}건</div><div class="s">선로 점유율 분산 완료</div></div>
+`;
+
+/* 플래그 리스트 */
+document.getElementById('flaglist').innerHTML = `
+  <div class="flag-item">
+    <div class="flag-dot p0"></div>
+    <div class="flag-body">
+      <b>13:45 Code Crimson 발령 (수술실 1·2 긴급 수혈)</b>
+      <span>4개 캡슐 동시 투입, 41.5초 만에 도착 완료. 선로 추월·양보 규칙 정상 동작.</span>
+    </div>
+  </div>
+  <div class="flag-item">
+    <div class="flag-dot p0"></div>
+    <div class="flag-body">
+      <b>16:03 Code Crimson 2차 (ICU)</b>
+      <span>가감속 프로파일(0.35G) 자동 적용으로 38.2초 만에 완수.</span>
+    </div>
+  </div>
+  <div class="flag-item">
+    <div class="flag-dot p2"></div>
+    <div class="flag-body">
+      <b>17:20 항암제 오더 40초 SLA 초과 (O-124)</b>
+      <span>주행 시간은 정상(21초)이었으나, ICU 스테이션 버퍼 만석으로 선로 대기 619초 발생. 시스템 장애 아님.</span>
+    </div>
+  </div>
+  <div class="flag-item">
+    <div class="flag-dot p2"></div>
+    <div class="flag-body">
+      <b>14:00 조제 스케줄러 배치 방출 (O-105, O-106)</b>
+      <span>2분 간격 정밀 시차 투입으로 P3 트래픽과의 병목 사전 회피.</span>
+    </div>
+  </div>
+`;
+
+/* ═══════════════════════════════════════════════════════════
+   3. 브리핑 텍스트 생성기
+   ═══════════════════════════════════════════════════════════ */
+function scriptDaily(){
+  const yInfo = getSeoulYesterdayInfo();
+  return [
+    {say: `어제, ${yInfo.spoken} 브리핑입니다.`,
+     html: `어제, <b>${yInfo.spoken}</b> 브리핑입니다.`, ids: []},
+    {say: `총 34건의 오더가 이송되었으며, 코드 크림슨은 2건 발령되었습니다.`,
+     html: `총 <b>34건</b>의 오더가 이송되었으며, <span class="badge p0">Code Crimson</span>은 <b>2건</b> 발령되었습니다.`, ids: []},
+    {say: `첫 번째는 13시 45분 수술실 1, 2번으로의 수혈혈액 4건 동시 이송으로, 41.5초 만에 도착했습니다.`,
+     html: `첫 번째는 <b>13시 45분</b> <span class="badge p0">수술실 1·2번</span>으로의 수혈혈액 4건 동시 이송으로, <b>41.5초</b> 만에 도착했습니다.`, ids: ['O-101']},
+    {say: `두 번째는 16시 3분 중환자실 이송으로 38.2초에 완료되었습니다.`,
+     html: `두 번째는 <b>16시 3분</b> <span class="badge p0">중환자실(ICU)</span> 이송으로 <b>38.2초</b>에 완료되었습니다.`, ids: ['O-118']},
+    {say: `특이사항으로는 17시 20분 항암제 1건이 640초 소요되어 목표를 초과했습니다. ICU 스테이션 버퍼 만석에 따른 선로 대기였으며, 주행 장치는 정상입니다.`,
+     html: `특이사항으로는 <b>17시 20분</b> <span class="badge p2">항암제 1건</span>이 <b>640초</b> 소요되어 목표를 초과했습니다. ICU 스테이션 버퍼 만석에 따른 선로 대기였으며, 주행 장치는 <b>정상</b>입니다.`, ids: ['O-124']},
+    {say: `전체 SLA 준수율은 97.1 퍼센트입니다. 이상입니다.`,
+     html: `전체 SLA 준수율은 <b>97.1%</b>입니다. 이상입니다.`, ids: []}
+  ];
+}
+
+function scriptCrimson(){
+  return [
+    {say: `어제 발령된 코드 크림슨은 총 2건입니다.`,
+     html: `어제 발령된 <span class="badge p0">Code Crimson</span>은 총 <b>2건</b>입니다.`, ids: []},
+    {say: `13시 45분, 수술실 다량 출혈에 따라 4개 캡슐이 동시 투입되어 41.5초 만에 전량 이송되었습니다.`,
+     html: `<b>13시 45분</b>, 수술실 다량 출혈에 따라 4개 캡슐이 동시 투입되어 <b>41.5초</b> 만에 전량 이송되었습니다.`, ids: ['O-101']},
+    {say: `16시 3분, ICU 응급 수혈 1건은 38.2초에 완료되었습니다. 2건 모두 목표 시간 60초를 여유 있게 달성했습니다.`,
+     html: `<b>16시 3분</b>, ICU 응급 수혈 1건은 <b>38.2초</b>에 완료되었습니다. 2건 모두 목표 시간 60초를 여유 있게 달성했습니다.`, ids: ['O-118']}
+  ];
+}
+
+function scriptIssues(){
+  return [
+    {say: `어제 발생한 이상 항목은 1건입니다.`,
+     html: `어제 발생한 이상 항목은 <b>1건</b>입니다.`, ids: []},
+    {say: `17시 20분, 주사조제실에서 중환자실로 가던 항암제 오더가 640초 동안 처리되었습니다.`,
+     html: `<b>17시 20분</b>, 주사조제실에서 중환자실로 가던 <span class="badge p2">항암제 오더</span>가 <b>640초</b> 동안 처리되었습니다.`, ids: ['O-124']},
+    {say: `원인은 ICU 스테이션 수신 버퍼가 가득 차 선로에서 619초간 정차 대기한 것입니다. 설비 고장은 아닙니다.`,
+     html: `원인은 <b>ICU 스테이션 수신 버퍼 만석</b>으로 선로에서 619초간 정차 대기한 것입니다. 설비 고장은 아닙니다.`, ids: ['O-124']}
+  ];
+}
+
+/* ═══════════════════════════════════════════════════════════
+   4. 음성 인식 라우터
+   ═══════════════════════════════════════════════════════════ */
+const ROUTES = [
+  {test:/(정지|멈춰|그만|스톱|stop)/i, run:()=>null, label:'정지', isStop: true},
+  // 팝업 닫기 / 거절: '아니 괜찮아', '괜찮아', '창 닫아' 등
+  {test:/(아니\s*괜찮|괜찮아|괜찮아요|아니\s*됐어|됐어|아니요|창\s*닫아|닫아줘|닫아|종료|끝내)/i, run:()=>null, label:'창 닫기', isClose: true},
+  // 코드 크림슨: '코드'와 '크림슨'이 함께 있거나 '피제로' 등 명확한 조합 필수
+  {test:/(코드\s*크림슨|크림슨\s*(만|오더|브리핑|보고)|P0\s*(오더|브리핑)|수혈\s*혈액\s*(브리핑|오더))/i, run:scriptCrimson, label:'코드 크림슨만'},
+  // 이상 항목: '이상' + '항목/오더/브리핑/보고' 또는 '지연' + '오더/브리핑/건' 등 조합 필수
+  {test:/(이상\s*(항목|오더|내용|건|브리핑|보고|만)|지연\s*(오더|내용|건|브리핑)|문제\s*(오더|건|보고)|특이\s*사항)/i, run:scriptIssues, label:'이상 항목만'},
+  // 어제 일 브리핑: '어제' + '(일|있었던|상황|오더|내용|요약|보고|브리핑)' 또는 '전체 브리핑' 조합 필수
+  {test:/(어제\s*(있었던|일|상황|오더|내용|요약|보고|브리핑)|전체\s*브리핑|일일\s*브리핑|어젯밤\s*(일|상황|브리핑))/i, run:scriptDaily, label:'어제 일 브리핑'}
+];
+
+/* ═══════════════════════════════════════════════════════════
+   5. 안정적인 고음질 낭독 + 타임라인 동기화 엔진
+   ═══════════════════════════════════════════════════════════ */
+const briefEl = document.getElementById('brief');
+let voice = null, speaking = false;
+window._activeUtterance = null;
+
+function getKoreanVoice(){
+  if (!('speechSynthesis' in window)) return null;
+  const vs = window.speechSynthesis.getVoices();
+  return vs.find(v => (v.lang === 'ko-KR' || v.lang === 'ko_KR') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Yuna') || v.name.includes('Heami'))) ||
+         vs.find(v => v.lang === 'ko-KR' || v.lang === 'ko_KR') ||
+         vs.find(v => v.lang.startsWith('ko')) || null;
+}
+
+function pickVoice(){
+  voice = getKoreanVoice();
+}
+if ('speechSynthesis' in window){
+  pickVoice();
+  window.speechSynthesis.onvoiceschanged = pickVoice;
+}
+
+function clearMarks(){ Object.values(marks).forEach(m => m.classList.remove('hot')); scrub.classList.remove('on'); }
+
+function highlight(ids){
+  clearMarks();
+  if (!ids.length) return;
+  ids.forEach(i => marks[i] && marks[i].classList.add('hot'));
+  const ev = EV.find(e => e.id === ids[0]);
+  if (ev){
+    const tagW = window.innerWidth > 620 ? 130 : 86;
+    scrub.style.left = `calc(${tagW}px + (100% - ${tagW}px) * ${min(ev.t)/1440})`;
+    scrub.classList.add('on');
+  }
+}
+
+const veriaHud = document.getElementById('veria-hud');
+const veriaStatus = document.getElementById('veria-status');
+const veriaUserText = document.getElementById('veria-user-text');
+const veriaAiText = document.getElementById('veria-ai-text');
+const veriaOrbContainer = document.querySelector('.veria-orb-container');
+
+function openVeriaHud(showStatus = false, statusText = '', initialUser = '말씀해 주세요…'){
+  veriaHud.classList.add('active');
+  if (showStatus && statusText) {
+    veriaStatus.textContent = statusText;
+    veriaStatus.style.display = 'inline-flex';
+  } else {
+    veriaStatus.textContent = '';
+    veriaStatus.style.display = 'none';
+  }
+  veriaUserText.textContent = initialUser;
+  veriaUserText.classList.add('listening'); // 음성 인식 중: 흰색
+}
+
+function closeVeriaHud(){
+  veriaHud.classList.remove('active');
+  if (veriaOrbContainer) veriaOrbContainer.classList.remove('speaking');
+  stopSpeaking();
+}
+
+function unlockAudio(){
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.resume();
+    const emptyU = new SpeechSynthesisUtterance('');
+    emptyU.volume = 0;
+    window.speechSynthesis.speak(emptyU);
+  }
+}
+
+function play(lines){
+  if (!lines || !lines.length) return;
+
+  const isGreeting = lines.length === 1 && lines[0].say.includes('어떤 정보');
+  const userPrompt = isGreeting ? '베리아' : (document.getElementById('heard').textContent || '음성 호출');
+
+  // 브리핑 음성 출력 중일 때만 '브리핑 진행 중…' 표시
+  openVeriaHud(!isGreeting, '브리핑 진행 중…', userPrompt);
+
+  // 브리핑 시작 시: 내가 한 말 텍스트는 회색으로 변경 & 베리아 발화 애니메이션 활성화
+  veriaUserText.classList.remove('listening');
+  if (veriaOrbContainer) veriaOrbContainer.classList.add('speaking');
+
+  if (rec) {
+    try { rec.abort(); } catch(e){}
+  }
+
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
+  }
+
+  briefEl.innerHTML = lines.map((l,i) => `<p data-i="${i}">${l.html}</p>`).join('');
+  const ps = [...briefEl.querySelectorAll('p')];
+  let i = 0;
+  speaking = true;
+
+  setTimeout(() => {
+    const step = () => {
+      if (!speaking) return;
+      if (i >= lines.length){
+        clearMarks();
+        window._activeUtterance = null;
+
+        if (!isGreeting && 'speechSynthesis' in window) {
+          // 브리핑 완료 후 "더 도와드릴까요?" 음성 출력
+          veriaStatus.textContent = '';
+          veriaStatus.style.display = 'none';
+          veriaAiText.className = 'veria-answer-line';
+          veriaAiText.innerHTML = '더 도와드릴까요?';
+
+          const followUp = new SpeechSynthesisUtterance('더 도와드릴까요?');
+          followUp.lang = 'ko-KR';
+          followUp.rate = 1.0;
+          followUp.pitch = 1.0;
+          const curVoice = getKoreanVoice();
+          if (curVoice) followUp.voice = curVoice;
+
+          let followUpDone = false;
+          const onFollowUpEnd = () => {
+            if (followUpDone) return;
+            followUpDone = true;
+            speaking = false;
+            if (veriaOrbContainer) veriaOrbContainer.classList.remove('speaking');
+            veriaUserText.textContent = '말씀해 주세요…';
+            veriaUserText.classList.add('listening');
+            window._activeUtterance = null;
+            setTimeout(startContinuousRecognition, 300);
+          };
+
+          followUp.onend = onFollowUpEnd;
+          followUp.onerror = (e) => {
+            console.warn('Follow-up TTS warning:', e);
+            onFollowUpEnd();
+          };
+
+          window._activeUtterance = followUp;
+          window.speechSynthesis.speak(followUp);
+          return;
+        }
+
+        // 단순 인사였거나 TTS 미지원 시 바로 대기 모드로 전환
+        speaking = false;
+        veriaStatus.textContent = '';
+        veriaStatus.style.display = 'none';
+        if (veriaOrbContainer) veriaOrbContainer.classList.remove('speaking');
+        veriaUserText.textContent = '말씀해 주세요…';
+        veriaUserText.classList.add('listening');
+        setTimeout(startContinuousRecognition, 400);
+        return;
+      }
+
+      ps.forEach(p => p.classList.remove('now'));
+      if (ps[i]) {
+        ps[i].classList.add('said','now');
+        ps[i].scrollIntoView({block:'nearest', behavior:'smooth'});
+      }
+      highlight(lines[i].ids);
+
+      veriaAiText.className = 'veria-answer-line';
+      veriaAiText.innerHTML = lines[i].html;
+
+      if ('speechSynthesis' in window){
+        window.speechSynthesis.resume();
+        const u = new SpeechSynthesisUtterance(lines[i].say);
+        u.lang = 'ko-KR';
+        u.rate = 1.0;
+        u.pitch = 1.0;
+        u.volume = 1.0;
+
+        const curVoice = getKoreanVoice();
+        if (curVoice) u.voice = curVoice;
+
+        window._activeUtterance = u;
+
+        let finished = false;
+        const advance = () => {
+          if (finished) return;
+          finished = true;
+          i++;
+          setTimeout(step, 80);
+        };
+
+        u.onend = advance;
+        u.onerror = (e) => {
+          console.warn('TTS Warning:', e);
+          advance();
+        };
+
+        window.speechSynthesis.speak(u);
+      } else {
+        i++;
+        setTimeout(step, 1000 + lines[i-1].say.length * 70);
+      }
+    };
+    step();
+  }, 100);
+}
+
+function stopSpeaking(){
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+  speaking = false;
+  clearMarks();
+  window._activeUtterance = null;
+  document.querySelectorAll('.brief p').forEach(p=>p.classList.remove('now'));
+  // 정지 시 상태 텍스트 숨김 및 베리아 발화 애니메이션 정지
+  veriaStatus.textContent = '';
+  veriaStatus.style.display = 'none';
+  if (veriaOrbContainer) veriaOrbContainer.classList.remove('speaking');
+  setTimeout(startContinuousRecognition, 300);
+}
+
+function ask(rawText){
+  if (speaking) return;
+  const text = (rawText || '').trim();
+  if (!text) return;
+
+  unlockAudio();
+
+  document.getElementById('heard').textContent = text;
+  document.getElementById('heard').classList.remove('idle');
+
+  if (/(정지|멈춰|그만|스톱|stop)/i.test(text)){
+    stopSpeaking();
+    return;
+  }
+
+  if (/(아니\s*괜찮|괜찮아|괜찮아요|아니\s*됐어|됐어|아니요|창\s*닫아|닫아줘|닫아|종료|끝내)/i.test(text)){
+    closeVeriaHud();
+    return;
+  }
+
+  const r = ROUTES.find(r => !r.isStop && !r.isClose && r.test.test(text));
+  if (r) {
+    play(r.run());
+    return;
+  }
+
+  if (/(베리아|베리야|배리아|배리야|베리|veria|beria)/i.test(text)) {
+    play([{
+      say: '네, 베리아입니다. 어떤 정보를 브리핑해 드릴까요?',
+      html: '네, <b>베리아</b>입니다. 어떤 정보를 브리핑해 드릴까요?',
+      ids: []
+    }]);
+  }
+}
+
+/* 칩 (음성 없이도 시연 가능) */
+document.getElementById('chips').innerHTML =
+  ROUTES.filter(r => !r.isStop && !r.isClose).slice().reverse().map(r => `<button class="chip" data-q="${r.label}">${r.label}</button>`).join('') +
+  `<button class="chip" data-stop="1">정지</button>`;
+document.getElementById('chips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.stop){ stopSpeaking(); return; }
+  ask('베리아, ' + b.dataset.q + '해줘');
+});
+
+document.getElementById('veria-hud-chips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.stop){ closeVeriaHud(); return; }
+  veriaUserText.textContent = '베리아, ' + b.dataset.q + '해줘';
+  ask('베리아, ' + b.dataset.q + '해줘');
+});
+
+/* ═══════════════════════════════════════════════════════════
+   6. 상시 음성 대기 엔진 (Always-Listening Hands-Free Engine)
+   ═══════════════════════════════════════════════════════════ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micBtn = document.getElementById('mic');
+const noteEl = document.getElementById('note');
+let rec = null, isUserPaused = false;
+let silenceTimer = null;
+let persistentMicStream = null;
+
+// 음성 명령 최종 실행 함수
+function executeVoiceCommand(text) {
+  if (speaking) return;
+  const trimmed = (text || '').trim();
+  if (!trimmed) return;
+
+  // 종료/거절 명령: 사용자의 말이 다 끝난 후 부드럽게 닫기
+  if (/(아니\s*괜찮|괜찮아|괜찮아요|아니\s*됐어|됐어|아니요|창\s*닫아|닫아줘|닫아|종료|끝내)/i.test(trimmed)) {
+    setTimeout(() => {
+      closeVeriaHud();
+    }, 250);
+    return;
+  }
+
+  const matchedRoute = ROUTES.find(r => !r.isClose && r.test.test(trimmed));
+  const isWakeWord = /(베리아|베리야|배리아|배리야|베리|veria|beria)/i.test(trimmed);
+
+  if (matchedRoute) {
+    ask(trimmed);
+  } else if (isWakeWord) {
+    ask('베리아');
+  }
+}
+
+// 마이크 권한 1회 획득 후 닫을 때까지 영구 유지 (Persistent Stream)
+async function requestPersistentMicPermission(){
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      if (!persistentMicStream) {
+        persistentMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('🎙️ Persistent Mic Stream Activated!');
+      }
+    } catch(e) {
+      console.warn('Mic permission error:', e);
+    }
+  }
+}
+
+function startContinuousRecognition(){
+  if (!rec || isUserPaused) return;
+  try {
+    rec.start();
+    micBtn.classList.add('live');
+  } catch(e) {
+    /* 이미 켜져있는 경우 무시 */
+  }
+}
+
+if (SR){
+  rec = new SR();
+  rec.lang = 'ko-KR';
+  rec.interimResults = true;
+  rec.continuous = true;
+
+  rec.onresult = ev => {
+    if (speaking) return; // TTS 중 자기 목소리 루프 방지
+
+    // 전체 인식 결과 누적하여 온전한 문장 구성
+    let fullTranscript = '';
+    for (let i = 0; i < ev.results.length; i++) {
+      fullTranscript += ev.results[i][0].transcript + ' ';
+    }
+    fullTranscript = fullTranscript.replace(/\s+/g, ' ').trim();
+    if (!fullTranscript) return;
+
+    const latest = ev.results[ev.results.length - 1];
+
+    // 1. 실시간 텍스트 반영 (단어가 아닌 온전한 문장 형태로 화면 표출)
+    document.getElementById('heard').textContent = fullTranscript;
+    document.getElementById('heard').classList.remove('idle');
+
+    const isWakeWord = /(베리아|베리야|배리아|배리야|베리|veria|beria)/i.test(fullTranscript);
+
+    // 베리아 호출 시 HUD 즉시 오픈
+    if (isWakeWord && !veriaHud.classList.contains('active')) {
+      openVeriaHud(false, '', fullTranscript);
+    }
+
+    if (veriaHud.classList.contains('active')) {
+      veriaUserText.textContent = fullTranscript;
+      veriaUserText.classList.add('listening'); // 음성 입력 중 선명한 흰색 유지
+    }
+
+    // 정지/멈춤 명령은 지연 없이 즉각 반응
+    if (/(정지|멈춰|그만|스톱|stop)/i.test(fullTranscript)) {
+      clearTimeout(silenceTimer);
+      stopSpeaking();
+      return;
+    }
+
+    clearTimeout(silenceTimer);
+
+    // 2. 단어 조합이 인식되더라도 말이 완전히 끝난 후 브리핑 시작 / 창 닫기 실행
+    if (latest.isFinal) {
+      // 음성 인식 문장 확정(isFinal) 시 약간의 자연스러운 텀(200ms) 후 실행
+      silenceTimer = setTimeout(() => {
+        executeVoiceCommand(fullTranscript);
+      }, 200);
+    } else {
+      // 발화 진행 중(interim)인 경우: 말이 끝나고 침묵(800ms)이 이어질 때 실행
+      silenceTimer = setTimeout(() => {
+        executeVoiceCommand(fullTranscript);
+      }, 800);
+    }
+  };
+
+  rec.onend = () => {
+    if (!isUserPaused && !speaking) {
+      setTimeout(startContinuousRecognition, 150);
+    } else if (isUserPaused) {
+      micBtn.classList.remove('live');
+    }
+  };
+
+  rec.onerror = e => {
+    if (e.error === 'not-allowed') {
+      noteEl.innerHTML = '⚠️ <b style="color:var(--p0)">마이크 권한 필요</b>: 상단 주소창에서 마이크를 허용해 주세요.';
+    } else if (e.error !== 'no-speech') {
+      console.warn('Speech error:', e.error);
+    }
+  };
+
+  noteEl.innerHTML = '✨ <b>상시 음성 대기 중</b>: <code>"베리아"</code>라고 부르면 즉시 음성으로 답변합니다.';
+
+  // 초기 활성화 및 영구 마이크 권한 요청
+  window.addEventListener('DOMContentLoaded', () => {
+    requestPersistentMicPermission();
+    startContinuousRecognition();
+  });
+
+  window.addEventListener('click', () => {
+    unlockAudio();
+    requestPersistentMicPermission();
+    if (!isUserPaused) startContinuousRecognition();
+  }, { once: true });
+
+} else {
+  micBtn.disabled = true;
+  micBtn.style.opacity = .35;
+  noteEl.textContent = '이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 또는 Edge를 권장합니다.';
+}
+
+// 마이크 버튼 수동 제어
+micBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!rec) return;
+  if (!isUserPaused) {
+    isUserPaused = true;
+    rec.stop();
+    micBtn.classList.remove('live');
+    document.getElementById('heard').textContent = '음성 대기 일시정지됨 (버튼을 눌러 다시 활성화)';
+    document.getElementById('heard').classList.add('idle');
+  } else {
+    isUserPaused = false;
+    stopSpeaking();
+    startContinuousRecognition();
+    document.getElementById('heard').textContent = '"베리아, [명령어]" 상시 대기 중 🎙️';
+    document.getElementById('heard').classList.add('idle');
+  }
+});
+
+document.getElementById('stamp').textContent = getSeoulYesterdayInfo().todayKST;
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+/* NanumSquare — 로컬 번들 (woff2만, 오프라인 대응). 원본: moonspam/NanumSquare@2.0 */
+@font-face { font-family:'NanumSquare'; font-weight:300; font-display:swap;
+  src:local('NanumSquare Light'), url(NanumSquareL.woff2) format('woff2'); }
+@font-face { font-family:'NanumSquare'; font-weight:400; font-display:swap;
+  src:local('NanumSquare'), url(NanumSquareR.woff2) format('woff2'); }
+@font-face { font-family:'NanumSquare'; font-weight:700; font-display:swap;
+  src:local('NanumSquare Bold'), url(NanumSquareB.woff2) format('woff2'); }
+@font-face { font-family:'NanumSquare'; font-weight:800; font-display:swap;
+  src:local('NanumSquare ExtraBold'), url(NanumSquareEB.woff2) format('woff2'); }
