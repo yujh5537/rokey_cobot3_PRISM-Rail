@@ -307,7 +307,15 @@ rosdep install --from-paths src --ignore-src -r -y
 
 # 또는 최소 설치 (엔진만 돌릴 때)
 pip3 install pyyaml pytest --break-system-packages
+
+# Python 의존성 일괄 설치 — OCR·라벨 생성·그리퍼 드라이버까지 포함
+pip3 install -r requirements.txt --break-system-packages
+
+# OCR 엔진 (pytesseract 가 호출하는 실행 파일)
+sudo apt install tesseract-ocr tesseract-ocr-eng
 ```
+
+pip 로 설치할 항목의 정본은 [`requirements.txt`](requirements.txt) 입니다.
 
 >### 🖥️ 관제 대시보드 웹 UI (`src/medical-rail-twin`)
 
@@ -536,7 +544,7 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ~/isaacsim/isaac-sim.sh
 ```
 
-Isaac Sim이 켜지면 최종 씬 `practice.usd` 를 연다.
+Isaac Sim이 켜지면 최종 씬 `parctice.usd` 를 연다.
 
 그다음 **LIVE OFF** 로 설정한다.
 
@@ -575,7 +583,7 @@ initial door = CLOSED
 
 ### 8-3. Capsule 이동 테스트
 
-이동 테스트 코드는 전부 Isaac Sim Script Editor에서 실행한다. 씬 `practice.usd` 를 먼저 연 상태여야 한다.
+이동 테스트 코드는 전부 Isaac Sim Script Editor에서 실행한다. 씬 `parctice.usd` 를 먼저 연 상태여야 한다.
 
 #### 8-3-1. Shaft 상승 / 하강 테스트
 
@@ -590,7 +598,7 @@ SB_DN   F2 → B1F
 실행 순서:
 
 ```
-1. practice.usd 열기
+1. parctice.usd 열기
 2. Script Editor 열기
 3. Shaft 테스트 코드 실행
 ```
@@ -610,7 +618,7 @@ BB_01 → BB_02 → BB_03 → BB_04a → BB_05 → BB_06a → BB_06b → BB_06d
 
 코드 자체가 **B1F FULL ROUTE TEST** 로 구성되어 있고 `Capsule_02` 와 B1F Blocks를 사용한다.
 
-실행: `practice.usd` → Script Editor → **B1F FULL ROUTE** 코드 Run
+실행: `parctice.usd` → Script Editor → **B1F FULL ROUTE** 코드 Run
 
 #### 8-3-3. 2F 전체 이동 테스트
 
@@ -626,7 +634,7 @@ B2_01 → B2_02 → B2_03 → B2_04a → B2_05 → B2_06 → B2_07a → B2_08 �
 
 OR1 / OR2도 이 코드 안에 포함돼 있다.
 
-실행: `practice.usd` → Script Editor → **F2 FULL ROUTE** 코드 Run
+실행: `parctice.usd` → Script Editor → **F2 FULL ROUTE** 코드 Run
 
 #### 8-3-4. 전체 레일 순환 테스트
 
@@ -641,7 +649,7 @@ B1 Depot → BB_08 → B1 Main → SB_UP → F2 → OR1 → OR2 → SB_DN → B1
 실행:
 
 ```
-1. practice.usd 열기
+1. parctice.usd 열기
 2. Capsule Door/Button Controller 실행
 3. Script Editor에서 C02 WHOLE SYSTEM LAP 코드 Run
 ```
@@ -730,7 +738,7 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 **Isaac Sim**
 
 ```
-1. practice.usd Open
+1. parctice.usd Open
 
 2. LIVE OFF
 
@@ -817,7 +825,7 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 **[Scene]**
 
 ```
-practice.usd Open
+parctice.usd Open
 LIVE OFF
 ```
 
@@ -852,4 +860,4 @@ F2 FULL ROUTE
 C02 WHOLE SYSTEM LAP
 ```
 
-→ 전부 `practice.usd` 를 연 뒤 Isaac Sim Script Editor에서 Run
+→ 전부 `parctice.usd` 를 연 뒤 Isaac Sim Script Editor에서 Run
