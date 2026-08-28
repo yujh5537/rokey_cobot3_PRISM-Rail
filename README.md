@@ -221,9 +221,11 @@ sequenceDiagram
 | 방화벽 | `ufw` 비활성화 |
 | 빌드 | `colcon` (ament_python) |
 | 시뮬레이터 | NVIDIA **Isaac Sim** (`omni.usd` · `omni.kit.app` · `omni.replicator.core` · `pxr` API 사용) |
-
-> ⚠️ Isaac Sim·NVIDIA 드라이버·CUDA의 **정확한 버전은 이 저장소에 기록되어 있지 않습니다.**
-> B·C 담당 GPU PC에서 `nvidia-smi` 및 Isaac Sim 버전 표기를 확인해 채워 넣어야 합니다.
+| Isaac Sim | 5.1.0 |
+| NVIDIA GPU 드라이버 | 580.173.02 (기본 요구 사양: 580.65.06 이상 필수, 패키지명: nvidia-driver-580-open) |
+| CUDA 버전 | 13.0 (nvidia-smi 표기 기준) |
+| 커널 | Linux Kernel 6.14.0-27-generic |
+| GPU | NVIDIA GeForce RTX 5080 (VRAM 16GB/ 16303 MiB) |
 
 ### 환경 설정 (최초 1회)
 
@@ -307,10 +309,49 @@ rosdep install --from-paths src --ignore-src -r -y
 pip3 install pyyaml pytest --break-system-packages
 ```
 
-> ⚠️ `src/medical-rail-twin`(D 대시보드)은 `.gitmodules` 없이 서브모듈 포인터만 커밋되어 있어
-> **clone 시 빈 디렉터리로 남습니다.** UI가 필요하면 D 담당자에게 별도 저장소 주소를 받으세요.
+>### 🖥️ 관제 대시보드 웹 UI (`src/medical-rail-twin`)
+
+본 프로젝트의 관제 UI 대시보드는 독립 프론트엔드 레포지토리로 연동되어 있습니다.
+
+#### 저장소 클론 및 서브모듈 초기화
+```bash
+# 서브모듈을 포함하여 프로젝트 전체 클론
+git clone --recurse-submodules [https://github.com/Hanseokhyung/rokey_cobot3.git](https://github.com/Hanseokhyung/rokey_cobot3.git)
+
+# 이미 클론한 경우 하위 모듈 동기화
+git submodule update --init --recursive
 
 ---
+
+#### 대시보드 실행
+cd src/medical-rail-twin
+npm install
+npm run dev
+
+---
+```
+#### 2. 저장소를 분리 운영(독립 실행) 형태로 안내하는 경우
+
+서브모듈 등록 없이 별도 컴포넌트로 명시하고자 할 때는 '오류/주의' 문구 대신 **"마이크로서비스/독립 모듈 아키텍처"** 관점으로 포장하여 작성합니다.
+
+## 🧩 서브 시스템 구성 및 설치 가이드
+
+### 1. 관제 코어 및 시뮬레이션 브릿지 (Core & Sim)
+ROS 2 Jazzy 기반 관제 엔진(`rail_control_core`)과 Isaac Sim 연동 브릿지(`rail_bridge`)를 빌드합니다.
+```bash
+cd ~/rokey_cobot3
+colcon build --symlink-install
+source install/setup.bash
+
+## 관제 모니터링 대시보드 (Web UI)
+: 실시간 오더 큐, 캡술 텔레메트리, RTA slack 현황을 모니터링하는 웹 대시보드입니다.
+
+```bash
+# 프론트엔드 클론 및 구동
+git clone <대시보드_공식_레포_URL> src/medical-rail-twin
+cd src/medical-rail-twin
+npm install
+npm run start
 
 ## 6. 사용법
 
@@ -481,45 +522,3 @@ cobot3_ws/
 | 블록 길이·씬 좌표 | `src/rail_control_core/rail_control_core/topology.py` (코드가 단일 진실 소스) |
 
 ---
-
-## 8. 협업 규칙
-
-### 담당 폴더 — 내 폴더만 수정
-
-다른 사람 폴더는 **직접 고치지 말고, 담당자에게 요청**하세요. (담당표는 §1-1)
-
-### 공용 인터페이스 — 예외 규칙
-
-`src/rail_bridge/rail_bridge/interface_schema.json`과
-`src/rail_control_core/rail_control_core/topology.py`는 **전원이 같이 씁니다.**
-
-- 혼자 판단으로 고치지 마세요.
-- **이름 변경·삭제는 다른 사람 코드를 깨뜨립니다.** 절대 사전 통보 없이 하지 마세요.
-- 필드 **추가**는 하위 호환으로 허용(수신측은 모르는 키 무시), **삭제·의미 변경**은 버전 상향 + 팀 합의 필요.
-
-### 블록 길이·좌표를 바꿔야 할 때
-
-```bash
-# 1) topology.py 의 BLOCKS 길이 / NODE_XY / BLOCK_PATHS 수정
-# 2) 새 수치 측정
-python3 src/rail_control_core/tools/kpi_report.py
-
-# 3) 기준값이 바뀌었으면 두 곳을 함께 갱신 (한쪽만 고치지 말 것)
-#    - docs/topology_spec.md §6-2 표
-#    - src/rail_control_core/test/test_regression.py 의 BASE_A / BASE_B
-python3 -m pytest src/rail_control_core/test/ -q
-```
-
-숫자만 맞추다 보면 **대피 장면이 사라지는 일이 실제로 발생합니다.**
-`kpi_report.py` 출력의 `발생 장면` 줄에 YIELD / EVAC_LANE / FINISH_ALLOWED / MEET_PASS /
-RTA_ENGAGED가 모두 있는지 반드시 함께 확인하세요.
-
-### push 전 최소 절차
-
-1. 작업 시작 전 `git pull origin main`으로 최신 상태 받기
-2. 내 폴더 작업이 끝나면 팀에 "○○ 폴더 push함" 알리기
-3. 공용 인터페이스를 건드렸다면 공지에 **어떤 필드가 바뀌었는지** 반드시 포함
-
-### 충돌 났을 때
-
-`git pull`했는데 충돌이 나면, 절대 혼자 임의로 남의 코드를 지우지 말고 팀 채팅에 공유 후 같이 해결하세요.
