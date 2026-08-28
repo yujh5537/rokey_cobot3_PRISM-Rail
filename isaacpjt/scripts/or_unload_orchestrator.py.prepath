@@ -165,10 +165,8 @@ SUCTION_POINT_PATH = (
     "onrobot_vg10/suction_point"
 )
 
-# 팩은 참조로 합성돼 있어 MovePrim 이 안 된다 -> 래퍼(Cargo_OR2)째 옮긴다.
-# 소유권에 따라 경로가 두 곳을 오가므로 상수로 박지 않고 양쪽을 모두 인정한다.
-CARGO_WORLD_ROOT = "/World/Cargo_OR2"
-CARGO_LOADED_ROOT = "/World/Capsules/Capsule_05/Cargo_OR2"
+CARGO_WORLD_ROOT = "/World/Cargo_OR2/SurgicalPack"
+CARGO_LOADED_ROOT = "/World/Capsules/Capsule_05/SurgicalPack"
 
 if stage.GetPrimAtPath(CARGO_LOADED_ROOT).IsValid():
     CARGO_ROOT = CARGO_LOADED_ROOT
@@ -1072,9 +1070,9 @@ add_action(
 #   관제가 캡슐을 세운 뒤에 로봇이 움직이므로 순서가 물리적으로 자연스럽다.
 # ============================================================
 
-AUTO_TRIGGER = False       # 녹화용 단독 구동: Run 즉시 시작 (관제 없이)          # False = 기존 수동 모드 (Run 즉시 시작)
+AUTO_TRIGGER = True          # False = 기존 수동 모드 (Run 즉시 시작)
 TRIGGER_EVENT = "SERVICE_START"
-TRIGGER_DELAY = 22.0        # SERVICE_START(딥 진입) -> WORK(하강 완료) 대기
+TRIGGER_DELAY = 1.0          # 도착 후 여유 (초)
 
 _trig = {"seen": False, "t": None, "sock": None}
 
@@ -1116,20 +1114,7 @@ def _poll_trigger():
 
     if _trig["seen"] and not vg10_cycle.get("armed"):
         import time as _t
-        # 시간 대신 캡슐이 실제로 WORK(하강 완료)에 내려왔는지 확인한다.
-        # SERVICE_START 는 '딥 진입' 시점이라 하강에 약 9초가 더 걸리고,
-        # 선점/지연으로 편차가 생기므로 위치 판정이 안전하다.
-        _c5 = stage.GetPrimAtPath("/World/Capsules/Capsule_05")
-        _z = 99.0
-        try:
-            _z = float(UsdGeom.XformCache(Usd.TimeCode.Default())
-                       .GetLocalToWorldTransform(_c5).ExtractTranslation()[2])
-        except Exception:
-            pass
-        _timeout = _t.time() - _trig["t"] >= 25.0       # 위치 판정 실패 대비 안전망
-        if _z <= 11.3 or _timeout:
-            if _timeout and _z > 11.3:
-                print("[AUTO] 위치 판정 실패 -> 시간 기반 폴백 (z=" + str(round(_z, 2)) + ")")
+        if _t.time() - _trig["t"] >= TRIGGER_DELAY:
             vg10_cycle["armed"] = True
             print("")
             print("========================================")

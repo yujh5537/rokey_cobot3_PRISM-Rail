@@ -127,15 +127,7 @@ class CapsuleActor:
         b_id = str(block_id).upper().replace("_", "-")
 
         # 1) 샤프트 구간 (SB-UP, SB-DN): 전 캡슐 (0, 0, 90) 수직 정렬 강제
-        # OR 서비스 딥(SERVICE)도 수직 승강 구간이므로 샤프트와 동일하게 수직 정렬한다
-        # OR 서비스 딥(SERVICE): x,y 고정 + z 만 변하는 수직 승강.
-        # dx,dy 가 0 이라 yaw 재계산이 무의미하고, 90 을 박으면 heading_offset 이
-        # 다른 캡슐이 옆으로 눕는다 -> 진입 직전 자세를 그대로 유지한다.
-        if "SERVICE" in b_id:
-            rot_x = 0.0
-            rot_y = 0.0
-            rot_z = self.yaw
-        elif "SB" in b_id or "SHAFT" in b_id:
+        if "SB" in b_id or "SHAFT" in b_id:
             rot_x = 0.0
             rot_y = 0.0
             rot_z = 90.0
@@ -201,13 +193,8 @@ class FixedBridgeNode(Node):
                         actor.set_visible(False)
                     else:
                         actor.set_visible(True)
-                        # SERVICING(서비스 딥) 중에는 캡슐이 논리 블록을 벗어나므로
-                        # block_id 가 빈 문자열로 온다. bid 를 필수로 요구하면 딥 구간
-                        # 전체가 스킵되어 캡슐이 정차 지점에 얼어붙는다.
-                        # 위치의 진실 소스는 코어 xyz 이므로 x 만 있으면 적용한다 (합의 2026-08-21).
-                        if "x" in c:
-                            actor.update_pose(bid or "SERVICE", float(c["x"]), float(c["y"]),
-                                              float(c["z"]), c.get("forward", True))
+                        if bid and "x" in c:
+                            actor.update_pose(bid, float(c["x"]), float(c["y"]), float(c["z"]), c.get("forward", True))
         except Exception as e:
             pass
 
