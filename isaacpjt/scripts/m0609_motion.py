@@ -4,11 +4,25 @@
 #   - cosine ramp: no jerk with 12kg payload
 #   API: goto(name_or_list, duration_s) / grip(close, duration_s) / busy()
 # ============================================================
-import json, math
+import json, math, os
 import omni.usd, omni.kit.app
 from pxr import UsdPhysics
 
-CFG = json.load(open("/home/rokey/rokey_cobot3/isaacpjt/config/or_station.json"))
+def _find_cfg():
+    cands = [os.environ.get("OR_STATION_CFG")]
+    try:
+        cands.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "..", "config", "or_station.json"))
+    except NameError:
+        pass
+    cands += ["/home/rokey/cobot3_ws/medical-rail-twin/isaacpjt/config/or_station.json",
+              "/home/rokey/rokey_cobot3/isaacpjt/config/or_station.json"]
+    for p in cands:
+        if p and os.path.exists(p):
+            return os.path.normpath(p)
+    raise FileNotFoundError("or_station.json not found — set OR_STATION_CFG")
+
+CFG = json.load(open(_find_cfg()))
 stage = omni.usd.get_context().get_stage()
 
 def _drive(path, kind="angular", min_stiff=None, min_damp=None):

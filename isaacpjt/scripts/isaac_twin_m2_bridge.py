@@ -193,8 +193,11 @@ class FixedBridgeNode(Node):
                         actor.set_visible(False)
                     else:
                         actor.set_visible(True)
-                        if bid and "x" in c:
-                            actor.update_pose(bid, float(c["x"]), float(c["y"]), float(c["z"]), c.get("forward", True))
+                        # SERVICING(수술실 딥)은 레일 점유를 벗어나 block_id="" 이지만
+                        # svc_bid/x/y/z 로 계속 움직인다 — bid 없어도 좌표가 오면 따라간다.
+                        if "x" in c and st != "REMOVED":
+                            pose_bid = bid or c.get("svc_bid") or ""
+                            actor.update_pose(pose_bid, float(c["x"]), float(c["y"]), float(c["z"]), c.get("forward", True))
         except Exception as e:
             pass
 

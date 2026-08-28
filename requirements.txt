@@ -1,0 +1,36 @@
+# ============================================================
+# 의료 레일 관제 디지털 트윈 — Python 의존성
+#
+#   설치:  pip3 install -r requirements.txt --break-system-packages
+#
+#   ※ 검증 환경: Ubuntu 24.04 / Python 3.12.3 / ROS 2 Jazzy
+#   ※ 아래 목록은 pip 로 설치하는 것만 담았습니다.
+#      rclpy·std_msgs·std_srvs·geometry_msgs 등 ROS 2 패키지는 apt(ros-jazzy-*) 로,
+#      omni.* · pxr(USD) 는 Isaac Sim 내장 Python 에 이미 포함되어 있어 제외했습니다.
+# ============================================================
+
+# --- 관제 코어 (rail_control_core) -------------------------
+# 엔진 자체는 표준 라이브러리 + PyYAML 만 사용 (NumPy·SciPy 의존 없음)
+PyYAML==6.0.1
+
+# --- OCR 파이프라인 (isaacpjt/scripts/or_label_ocr_node.py 등) ---
+# pytesseract 는 tesseract 실행 파일을 호출하는 래퍼입니다.
+# 반드시 apt 로 엔진을 먼저 설치해야 동작합니다:
+#     sudo apt install tesseract-ocr tesseract-ocr-eng
+# 검증 환경은 apt 의 python3-opencv 4.6.0 을 사용했습니다.
+# pip 로 새로 깔 때는 아래 버전이 동일 계열입니다.
+opencv-python==4.6.0.66
+numpy==1.26.4
+pytesseract==0.3.13
+
+# --- 라벨 이미지 생성 (isaacpjt/scripts/make_labels.py) -----
+Pillow==10.2.0
+
+# --- VG10 그리퍼 드라이버 (ros2_vg10_gripper) --------------
+# 그리퍼 HTTP 제어에 사용. 검증 환경에서는 apt 로 설치했으므로 버전 고정을 뺐습니다.
+#     sudo apt install python3-pycurl
+pycurl
+
+# --- 테스트 · 빌드 -----------------------------------------
+pytest==7.4.4
+setuptools==68.1.2
