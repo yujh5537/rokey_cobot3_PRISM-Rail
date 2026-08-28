@@ -504,9 +504,21 @@ cobot3_ws/
 │   │   ├── launch/ test/ tools/
 │   │   └── README.md               #   관제 코어 상세 문서
 │   ├── rail_bridge/                # C — 인터페이스 스키마 + mock 노드 2종
+│   ├── ros2_vg10_gripper/          # B — OnRobot VG10 그리퍼 드라이버 (ROS 2 패키지)
+│   │   ├── ros2_vg10_gripper/      #   vg10_driver.py · vg10_node.py
+│   │   ├── urdf/ meshes/ launch/   #   vg10.urdf · vg10.xacro · STL · USD
+│   │   └── package.xml setup.py
 │   └── medical-rail-twin/          # D — 대시보드 (서브모듈 포인터, 비어 있음)
+├── rail_ui/                        # D — 오프라인 자체포함 관제 대시보드
+│   ├── rail_dashboard_v11.html     #   대시보드 본체 (index.html 이 여기로 리다이렉트)
+│   ├── rail_dashboard_single.html  #   단일 파일 배포판
+│   ├── roslib.min.js fonts/        #   로컬 번들 — 인터넷 없이 동작
+│   ├── mock/ voice_ai/             #   목데이터 · 음성 UI
+│   ├── start_dashboard.sh          #   http://localhost:8791 로 기동
+│   └── README_전달.md              #   다른 PC 전달 방법
+├── requirements.txt                # pip 의존성 정본
 ├── isaacpjt/                       # B·C — Isaac Sim 자산·스크립트
-│   ├── assets/                     #   USD 씬, 수술팩, 합성 데이터 생성기
+│   ├── assets/                     #   USD 씬(parctice.usd = 최종 씬), 수술팩, 합성 데이터 생성기
 │   ├── config/                     #   or_station.json · waypoints_v3.json
 │   └── scripts/                    #   브릿지, 레일 드라이버, M0609 모션, OR 하역
 ├── isaacsim/usd/                   # 쉬프트 씬
