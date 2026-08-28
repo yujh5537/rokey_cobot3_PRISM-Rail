@@ -522,3 +522,334 @@ cobot3_ws/
 | 블록 길이·씬 좌표 | `src/rail_control_core/rail_control_core/topology.py` (코드가 단일 진실 소스) |
 
 ---
+
+## 8. 프로젝트 실행 코드 정리
+
+### 8-1. Isaac Sim 실행
+
+Ubuntu 터미널에서:
+
+```bash
+export ROS_DOMAIN_ID=136
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+~/isaacsim/isaac-sim.sh
+```
+
+Isaac Sim이 켜지면 최종 씬 `practice.usd` 를 연다.
+
+그다음 **LIVE OFF** 로 설정한다.
+
+> Manipulator 시연 기준으로 `Scene Open → LIVE OFF → Door Controller → Vision Capture → Play → Orchestrator` 순서로 사용했다.
+
+---
+
+### 8-2. Capsule 버튼 + Door Controller
+
+**실행 위치** — Isaac Sim → Window → Script Editor
+
+**실행 파일** — `capsule_button_follow_and_door_controller.py`
+
+이 코드는 다음을 담당한다.
+
+```
+Capsule_01 ~ Capsule_10
+↓
+외부 빨간 버튼 위치 동기화
+↓
+버튼 Press 감지
+↓
+Door Open / Close
+```
+
+먼저 이 코드를 한 번 Run한다. 정상적으로 실행되면 대략 다음이 출력된다.
+
+```
+Connected 10/10
+initial door = CLOSED
+```
+
+**이 코드는 다른 이동 / Manipulator 코드보다 먼저 실행한다.**
+
+---
+
+### 8-3. Capsule 이동 테스트
+
+이동 테스트 코드는 전부 Isaac Sim Script Editor에서 실행한다. 씬 `practice.usd` 를 먼저 연 상태여야 한다.
+
+#### 8-3-1. Shaft 상승 / 하강 테스트
+
+사용했던 Shaft 테스트 코드:
+
+```
+SB_UP   B1F → F2
+   ↓
+SB_DN   F2 → B1F
+```
+
+실행 순서:
+
+```
+1. practice.usd 열기
+2. Script Editor 열기
+3. Shaft 테스트 코드 실행
+```
+
+이 코드는 Capsule Body를 직접 움직여 `SB_UP → Upper Transfer → SB_DN` 순으로 움직인다. 별도 터미널 실행은 필요 없다.
+
+#### 8-3-2. B1F 전체 이동 테스트
+
+B1F 테스트 코드는 `Capsule_02` 를 사용한다.
+
+경로:
+
+```
+BB_01 → BB_02 → BB_03 → BB_04a → BB_05 → BB_06a → BB_06b → BB_06d
+→ BB_07 → BB_08 → BB_09 → BB_05 → BB_04b → BB_03 → BB_02 → BB_01
+```
+
+코드 자체가 **B1F FULL ROUTE TEST** 로 구성되어 있고 `Capsule_02` 와 B1F Blocks를 사용한다.
+
+실행: `practice.usd` → Script Editor → **B1F FULL ROUTE** 코드 Run
+
+#### 8-3-3. 2F 전체 이동 테스트
+
+2F 테스트도 Script Editor에서 실행한다.
+
+경로:
+
+```
+B2_01 → B2_02 → B2_03 → B2_04a → B2_05 → B2_06 → B2_07a → B2_08 → OR1
+→ B2_08 → B2_07b → B2_06 → B2_09 → OR2 → B2_09 → B2_05 → B2_04b
+→ B2_03 → B2_02 → B2_01
+```
+
+OR1 / OR2도 이 코드 안에 포함돼 있다.
+
+실행: `practice.usd` → Script Editor → **F2 FULL ROUTE** 코드 Run
+
+#### 8-3-4. 전체 레일 순환 테스트
+
+전체 경로 확인용 코드는 **C02 WHOLE SYSTEM LAP** 이다.
+
+전체 동작:
+
+```
+B1 Depot → BB_08 → B1 Main → SB_UP → F2 → OR1 → OR2 → SB_DN → B1 Main → Depot
+```
+
+실행:
+
+```
+1. practice.usd 열기
+2. Capsule Door/Button Controller 실행
+3. Script Editor에서 C02 WHOLE SYSTEM LAP 코드 Run
+```
+
+전체 Capsule 레일 주행만 볼 때는 이 코드가 가장 편하다.
+
+---
+
+### 8-4. OCR 실행
+
+OCR은 Script Editor + 별도 Ubuntu 터미널을 같이 사용한다.
+
+**터미널 1 — OCR Node**
+
+```bash
+source /opt/ros/jazzy/setup.bash
+export ROS_DOMAIN_ID=136
+
+cd ~/rokey_cobot3/isaacpjt/scripts
+python3 or_label_ocr_node.py
+```
+
+이 터미널은 닫지 않고 그대로 둔다.
+
+OCR 결과로 `item_code`, `packaging_date`, `expiration_date`, `order_id`, `delivery_add`, `capsule_id`, `confidence` 등이 여기 출력된다.
+
+---
+
+### 8-5. Label Capture 코드
+
+**실행 위치** — Isaac Sim Script Editor
+
+**파일** — `or_label_capture.py`
+
+실행 후 다음이 뜨는지 확인한다.
+
+```
+LABEL CAPTURE MODULE ACTIVE
+```
+
+이 코드는 RSD455 카메라에서 SurgicalPack 라벨 이미지를 Capture한다.
+
+---
+
+### 8-6. Manipulator 실행
+
+Manipulator의 메인 코드는 `or_unload_orchestrator.py` 이다. 이 파일이 M0609 + VG10 전체 시퀀스를 담당한다.
+
+동작:
+
+```
+Button 접근 → Button Press → Door Open
+→ SurgicalPack 접근 → VG10 Grip → PACK_GRIPPED
+→ Camera 이동 → Label Capture / OCR
+→ Tray 이동 → VG10 Release → PACK_UNLOADED
+→ Button 접근 → Button Press → Door Close
+```
+
+실제 전체 Sequence도 이 순서다.
+
+---
+
+### 8-7. Manipulator + OCR 최종 실행 순서
+
+팀원이 실제로 실행할 때는 이 순서대로 하면 된다.
+
+**터미널 1** — 계속 켜둔다.
+
+```bash
+source /opt/ros/jazzy/setup.bash
+export ROS_DOMAIN_ID=136
+
+cd ~/rokey_cobot3/isaacpjt/scripts
+python3 or_label_ocr_node.py
+```
+
+**터미널 2**
+
+```bash
+export ROS_DOMAIN_ID=136
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+~/isaacsim/isaac-sim.sh
+```
+
+**Isaac Sim**
+
+```
+1. practice.usd Open
+
+2. LIVE OFF
+
+3. Script Editor
+   capsule_button_follow_and_door_controller.py
+   → Run
+
+4. Script Editor
+   or_label_capture.py
+   → Run
+
+5. ▶ PLAY
+
+6. Script Editor
+   or_unload_orchestrator.py
+   → Run
+```
+
+이게 Manipulator + Door + VG10 + OCR 시연 기본 실행 순서다.
+
+---
+
+### 8-8. 관제 없이 Manipulator만 테스트
+
+`or_unload_orchestrator.py` 에서:
+
+```python
+AUTO_TRIGGER = False
+```
+
+로 설정한다. 그러면 Script Editor에서 `or_unload_orchestrator.py` → Run 하는 순간 Manipulator Sequence가 바로 시작된다.
+
+관제와 연결해서 쓸 때는 반드시 다음으로 복원한다.
+
+```python
+AUTO_TRIGGER = True
+```
+
+---
+
+### 8-9. Capsule POV Camera
+
+별도 Python 실행이 필요 없다.
+
+Capsule 아래 Camera가 이미 Child로 들어가 있으므로 `Viewport → Camera 선택 → Camera_01 ~ Camera_10` 중 하나를 선택하면 된다.
+
+Capsule이 움직이면 Camera도 같이 이동한다.
+
+---
+
+### 8-10. 가장 중요한 실행 주의사항
+
+**Script Editor 코드는 같은 코드를 여러 번 Run하지 않는다.**
+
+특히 아래 세 개를 여러 번 실행하면 문제가 생길 수 있다.
+
+```
+capsule_button_follow_and_door_controller.py
+or_label_capture.py
+or_unload_orchestrator.py
+```
+
+| 중복 실행 시 발생 |
+|---|
+| ROS subscriber 중복 |
+| Update subscription 중복 |
+| Node 중복 |
+| Event callback 중복 |
+
+그래서 기본적으로 `Isaac 새로 실행 → Scene Open → 각 코드 한 번씩만 Run` 으로 하는 게 안전하다.
+
+---
+
+### 8-11. 팀원용 초간단 버전
+
+**[Isaac 실행]**
+
+```bash
+export ROS_DOMAIN_ID=136
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+~/isaacsim/isaac-sim.sh
+```
+
+**[Scene]**
+
+```
+practice.usd Open
+LIVE OFF
+```
+
+**[Script Editor 실행 순서]**
+
+```
+1. capsule_button_follow_and_door_controller.py
+
+2. or_label_capture.py
+   ※ OCR 사용 시
+
+3. ▶ PLAY
+
+4. or_unload_orchestrator.py
+```
+
+**[OCR 터미널]**
+
+```bash
+source /opt/ros/jazzy/setup.bash
+export ROS_DOMAIN_ID=136
+cd ~/rokey_cobot3/isaacpjt/scripts
+python3 or_label_ocr_node.py
+```
+
+**[이동 테스트]**
+
+```
+Shaft 테스트
+B1F FULL ROUTE
+F2 FULL ROUTE
+C02 WHOLE SYSTEM LAP
+```
+
+→ 전부 `practice.usd` 를 연 뒤 Isaac Sim Script Editor에서 Run
