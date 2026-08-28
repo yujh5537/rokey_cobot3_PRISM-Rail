@@ -22,6 +22,13 @@ class Bridge:
         if mode:
             self.mode = mode
         self.eng: Engine = scenario.build(self.mode)
+        # 모드 A(FCFS 비교군)는 R13 교행(meet_pass)을 강제로 끈다 — 단선에서 정면
+        # 조우한 공급(O-1)·회수(O-5)를 쌍둥이 대피 레인으로 치환하지 않고 그대로
+        # DEADLOCK 까지 간다(대시보드 목데이터 v15 와 동일 시나리오).
+        # scenario.PARAMS 는 건드리지 않고 이 엔진 인스턴스의 파라미터 사본만 교체하며,
+        # 모드 B 는 params.yaml 의 meet_pass_enabled 값을 그대로 따른다.
+        if self.mode == "A":
+            self.eng.p = {**self.eng.p, "meet_pass_enabled": False}
         self.running = False
         self._ev_idx = 0
         self._prev_blocks: dict | None = None
