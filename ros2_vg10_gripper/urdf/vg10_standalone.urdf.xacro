@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="onrobot_vg10">
+
+  <!-- 원본 vg10 매크로 인클루드 -->
+  <xacro:include filename="$(find ros2_vg10_gripper)/urdf/vg10.xacro" />
+
+  <!-- 최상위 베이스 링크 정의 -->
+  <link name="base_link" />
+
+  <!-- 매크로 호출 (매크로 이름이 vg10_model 또는 onrobot_vg10_model 인지 매크로 정의 확인) -->
+  <!-- 보통 onrobot_vg10 또는 vg10 매크로를 호출합니다 -->
+  <xacro:onrobot_vg10 prefix="" parent="base_link">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </xacro:onrobot_vg10>
+
+</robot>
