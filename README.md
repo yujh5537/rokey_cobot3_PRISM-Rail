@@ -1,4 +1,4 @@
-# 의료 레일 관제 디지털 트윈 (PRISM-Rail (프리즘 레일): Priority Rail Intelligent Scheduling & Monitoring (우선순위 레일 지능형 스케줄링 & 관제))
+# PRISM-Rail (프리즘 레일): Priority Rail Intelligent Scheduling & Monitoring (우선순위 레일 지능형 스케줄링 & 관제)
 
 병원 지하 1층 · 지상 2층을 잇는 **전용 레일 물류망**을 Isaac Sim 디지털 트윈으로 구축하고,
 그 위에서 **우선순위 선점(P-EDD) 관제 알고리즘**을 실행·검증하는 프로젝트입니다.
